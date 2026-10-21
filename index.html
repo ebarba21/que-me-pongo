@@ -262,8 +262,13 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V1.2';
+const VERSION = 'V1.3';
 const CAMBIOS = {
+  'V1.3': [
+    'Notas más exigentes: a partir de +10 puntos, lo que suma cuenta la mitad. El 100 pasa a ser raro.',
+    'Nueva regla: más de 4 tonos a la vista resta.',
+    '«Todo oscuro» ahora detecta tonos medio-oscuros como el verde oliva y resta más.'
+  ],
   'V1.2': [
     'Hora de salida de Manresa por defecto: 06:00. Si tenías la de antes (07:15), pasa sola a 06:00; se puede cambiar en Ajustes.'
   ],
@@ -287,7 +292,7 @@ const CONFIG = {
   textosVeredicto: { pega: 'Pega', matices: 'Pega con matices', no: 'No pega' },
   neutros: ['negro', 'blanco', 'gris', 'beige', 'marino', 'vaquero'],
   // Luminancia relativa por debajo de la cual una prenda cuenta como «oscura»
-  oscuroL: 0.08,
+  oscuroL: 0.12,
 
   /* ---------- Apartado 3 · Color ----------
      Las parejas se miran entre prendas que se tocan. Peso de cada contacto: */
@@ -332,7 +337,8 @@ const CONFIG = {
     mismoColor: { ajuste: -15, texto: 'Arriba y pantalón del mismo color: el conjunto queda plano' },
     protagonistas: { max: 2, ajuste: -15, texto: 'Más de 2 colores protagonistas' },
     puntoFocal: { ajuste: -8, texto: 'Dos puntos focales: color protagonista y calzado llamativo' },
-    todoOscuro: { ajuste: -6, texto: 'Todo oscuro: falta una prenda clara' },
+    todoOscuro: { ajuste: -10, texto: 'Todo oscuro: falta una prenda clara que levante el conjunto' },
+    tonos: { max: 4, ajuste: -6, texto: 'Demasiados tonos a la vista' },
     formalidad: { maxDif: 2, ajuste: -15, texto: 'Más de 2 puntos de diferencia de formalidad' },
     exteriorMismo: { ajuste: -8, texto: 'La cazadora no contrasta con' },
     exteriorContraste: { ajuste: 2, texto: 'La cazadora contrasta con el pantalón y con lo de arriba' },
@@ -425,6 +431,8 @@ const CONFIG = {
     normal: { nombre: 'Normal', ocasiones: ['Business casual', 'Smart casual'] },
     casual: { nombre: 'Casual', ocasiones: ['Business casual', 'Smart casual', 'Casual'], bonus: { 'Casual': 2, 'Smart casual': 2 }, textoBonus: 'Encaja con un día casual' }
   },
+  // Rendimiento decreciente de lo que suma (evita que todo acabe en 100)
+  tope: { desde: 10, factor: 0.5, texto: 'Rendimiento decreciente: a partir de +10, lo que suma cuenta la mitad' },
   // Variedad en HOY: penalización por cada pieza (pantalón, exterior, calzado) repetida entre propuestas
   variedadPenal: 2,
   // Videollamada: formalidad mínima de la parte de arriba
@@ -671,6 +679,11 @@ function evaluar(o, M, ctx) {
   /* Todo oscuro */
   if (ropa.every(oscura)) add(C.reglas.todoOscuro.ajuste, C.reglas.todoOscuro.texto, 'oscuro');
 
+  /* Tonos a la vista (ropa + calzado; el calcetín no cuenta). Cognac y marrón oscuro cuentan como marrón */
+  const tono = p => { const f = fam(p); return f === 'cognac' || f === 'marrón oscuro' ? 'marrón' : f; };
+  const tonos = [...new Set([base, capa, ext, pant, calz].filter(Boolean).map(tono))];
+  if (tonos.length > C.reglas.tonos.max) add(C.reglas.tonos.ajuste, `${C.reglas.tonos.texto} (${tonos.length}: ${tonos.join(', ')})`, 'tonos');
+
   /* Formalidad */
   const conF = [base, capa, ext, pant, calz].filter(p => p && p.formalidad != null);
   const hi = conF.reduce((a, b) => b.formalidad > a.formalidad ? b : a), lo = conF.reduce((a, b) => b.formalidad < a.formalidad ? b : a);
@@ -756,6 +769,9 @@ function evaluar(o, M, ctx) {
     if (TD && TD.bonusBase && base.formalidad >= TD.bonusBase.fMin) add(TD.bonusBase.ajuste, TD.bonusBase.texto, 'tipoDia');
   }
 
+  // Rendimiento decreciente: por encima de C.tope.desde, lo que suma cuenta C.tope.factor
+  const positivos = notas.filter(n => n.ajuste > 0).reduce((a, n) => a + n.ajuste, 0);
+  if (positivos > C.tope.desde) add(-(positivos - C.tope.desde) * (1 - C.tope.factor), C.tope.texto, 'tope');
   let suma = 0; for (const n of notas) suma += n.ajuste;
   const bruto = Math.round((C.puntosBase + suma) * 10) / 10;
   const nota = Math.max(0, Math.min(100, Math.round(bruto)));
@@ -993,6 +1009,9 @@ function runTests(silencioso) {
       const e = evaluar(o, M);
       ok(`Malo ${m[0]}) ${m.slice(1).filter(Boolean).join(' + ')}: <65 y «No pega»`, e.nota < 65 && e.veredicto === 'No pega', `${e.nota} · ${e.veredicto}`);
     }
+    // Caso real (21-10-2026): todo oscuro, correcto pero plano
+    const plano = evaluar({ base: 'polo-verde', pantalon: 'ch-marino', calzado: 'zap-derby-oscuro', calcetin: 'calc-negro' }, M);
+    ok('Polo verde oliva + chino marino + derby oscuro: «Pega con matices»', plano.veredicto === 'Pega con matices', `${plano.nota} · ${plano.veredicto}`);
     // No disponible nunca aparece en HOY (varios tiempos y tipos de día)
     const inv2 = clonar(INVENTARIO_BASE); inv2.find(p => p.id === 'z-celeste').disponible = false; inv2.find(p => p.id === 'ch-gris').disponible = false;
     let aparece = false, vacias = 0;

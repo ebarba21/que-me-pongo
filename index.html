@@ -262,8 +262,11 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V1.1';
+const VERSION = 'V1.2';
 const CAMBIOS = {
+  'V1.2': [
+    'Hora de salida de Manresa por defecto: 06:00. Si tenías la de antes (07:15), pasa sola a 06:00; se puede cambiar en Ajustes.'
+  ],
   'V1.1': [
     'Prendas confirmadas: polo verde oliva de punto, polos negro y marino de piqué, jersey marino Tommy Hilfiger, merino rojo Uniqlo col.17 y derbys sintéticos con aspecto ante.',
     'Cinturones: la frase de estilista dice cuál ponerse (marrón de ante con derbys, chino beige o vaqueros; negro con zapatilla y chino negro, gris o marino).',
@@ -432,7 +435,7 @@ const CONFIG = {
 
 const AJUSTES_BASE = {
   dias: [],
-  hora: '07:15',
+  hora: '06:00',
   coords: { manresa: { lat: 41.725, lon: 1.827 }, barcelona: { lat: 41.387, lon: 2.169 } },
   zona: 'Europe/Madrid',
   // Apartado 7
@@ -514,7 +517,7 @@ function cinturonPara(calz, pant) {
 const CINTURONES_TEXTO = 'Marrón de ante, ancho, hebilla plateada (Pier One PI952D048-O11) · negro de piel granulada, de vestir (Pier One PI954D01Z-Q11)';
 
 /* Correcciones de datos por versión: se aplican una vez a lo guardado en el iPhone */
-const DATOS_V = 2;
+const DATOS_V = 3;
 const CORRECCIONES = {
   2: {
     renombrar: { 'jer-blancomarino': 'jer-marino' },
@@ -524,7 +527,9 @@ const CORRECCIONES = {
       'u-merino-rojo': ['nombre', 'familia', 'hex', 'notas'],
       'zap-derby-cognac': ['hex', 'material', 'ref', 'notas'], 'zap-derby-oscuro': ['material', 'ref', 'notas']
     }
-  }
+  },
+  // V1.2: nueva hora de salida por defecto (solo si seguía la antigua, 07:15)
+  3: { horaAntigua: '07:15' }
 };
 
 /* Apartado 8 · Outfits probados */
@@ -1088,6 +1093,7 @@ function corregirDatos(r) {
       campos.forEach(k => { p[k] = clonar(b[k]); });
     }
     if (v === 2 && !r.ajustes.cinturones) r.ajustes.cinturones = CINTURONES_TEXTO;
+    if (c.horaAntigua && r.ajustes.hora === c.horaAntigua) r.ajustes.hora = AJUSTES_BASE.hora;
     r.datosV = v;
   }
   return r;
@@ -1177,7 +1183,7 @@ function tiempoPara(fecha) {
   if (man) return Object.assign({ fuente: 'manual' }, man);
   const T = S.tiempo;
   if (!T) return null;
-  const [hh, mm] = (S.ajustes.hora || '07:15').split(':').map(Number);
+  const [hh, mm] = (S.ajustes.hora || AJUSTES_BASE.hora).split(':').map(Number);
   const H = T.manresa.h, i = H.time.indexOf(`${fecha}T${String(hh).padStart(2, '0')}:00`);
   const bi = T.barcelona.d.time.indexOf(fecha);
   if (i < 0 || bi < 0) return null;
@@ -1582,9 +1588,9 @@ function vistaAjustes() {
 }
 
 /* ---------- Asistente de primera apertura ---------- */
-const W = { paso: 1, dias: [], hora: '07:15', resp: {} };
+const W = { paso: 1, dias: [], hora: AJUSTES_BASE.hora, resp: {} };
 function abrirAsistente() {
-  W.paso = 1; W.dias = S.ajustes.dias.slice(); W.hora = S.ajustes.hora || '07:15'; W.resp = {};
+  W.paso = 1; W.dias = S.ajustes.dias.slice(); W.hora = S.ajustes.hora || AJUSTES_BASE.hora; W.resp = {};
   $('#wizard').hidden = false; document.body.classList.add('noscroll'); pintarAsistente();
 }
 function pintarAsistente() {

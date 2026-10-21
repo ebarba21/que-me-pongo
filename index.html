@@ -262,8 +262,14 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V1.3';
+const VERSION = 'V2.0';
 const CAMBIOS = {
+  'V2.0': [
+    'Criterio de color rehecho con guías de moda masculina: el motor juzga el conjunto, no solo parejas sueltas.',
+    'Paleta: máximo 3 colores en la ropa (los tonos de un mismo color cuentan como uno; calzado y calcetín no cuentan). Con 4, no pega.',
+    'Un solo color de acento (azul cielo, granate o verde). Marrón y beige pasan a ser neutros.',
+    'Capas: base, jersey y cazadora de tres colores distintos restan. Verde y marino juntos piden un neutro claro en medio.'
+  ],
   'V1.3': [
     'Notas más exigentes: a partir de +10 puntos, lo que suma cuenta la mitad. El 100 pasa a ser raro.',
     'Nueva regla: más de 4 tonos a la vista resta.',
@@ -290,7 +296,11 @@ const CONFIG = {
   puntosBase: 75,
   veredicto: { pega: 80, matices: 65 },
   textosVeredicto: { pega: 'Pega', matices: 'Pega con matices', no: 'No pega' },
-  neutros: ['negro', 'blanco', 'gris', 'beige', 'marino', 'vaquero'],
+  neutros: ['negro', 'blanco', 'gris', 'beige', 'marino', 'vaquero', 'marrón'],
+  // Colores de acento: como mucho uno por outfit (el resto, neutros)
+  acentos: ['azul cielo', 'granate', 'rojo', 'verde', 'rosa apagado'],
+  // Grupos de color: los tonos de un mismo grupo cuentan como un solo color en la paleta
+  grupos: { 'azul cielo': 'azul', 'marino': 'azul', 'vaquero': 'azul', 'marrón': 'tierra', 'beige': 'tierra', 'cognac': 'tierra', 'marrón oscuro': 'tierra', 'granate': 'rojo', 'rojo': 'rojo' },
   // Luminancia relativa por debajo de la cual una prenda cuenta como «oscura»
   oscuroL: 0.12,
 
@@ -320,7 +330,7 @@ const CONFIG = {
       { a: 'negro', b: 'gris', nivel: 'ok', texto: 'Negro y gris: neutro y moderno' },
       { a: 'negro', b: 'beige', nivel: 'ok', texto: 'Negro y beige: contraste suave' },
       { a: 'gris', b: 'beige', nivel: 'ok', texto: 'Gris y beige: neutros que se entienden' },
-      { a: 'verde', b: 'marino', nivel: 'ok', texto: 'Verde y marino: discreto' },
+      { a: 'verde', b: 'marino', nivel: 'evitar', ajuste: -5, texto: 'Verde y marino juntos: piden un neutro claro en medio' },
       { a: 'verde', b: 'gris', nivel: 'ok', texto: 'Verde y gris: sobrio' },
       { a: 'verde', b: 'vaquero', nivel: 'ok', texto: 'Verde y vaquero: casual' },
       { a: 'granate', b: 'vaquero', nivel: 'ok', texto: 'Granate y vaquero: buen contraste' },
@@ -335,10 +345,11 @@ const CONFIG = {
   /* ---------- Reglas generales (apartados 3 y 6) ---------- */
   reglas: {
     mismoColor: { ajuste: -15, texto: 'Arriba y pantalón del mismo color: el conjunto queda plano' },
-    protagonistas: { max: 2, ajuste: -15, texto: 'Más de 2 colores protagonistas' },
+    acentos: { max: 1, ajuste: -8, texto: 'Dos colores de acento compiten' },
+    paleta: { corta: 2, bonus: 2, textoCorta: 'Paleta corta y coherente', max: 3, ajuste4: -18, ajuste5: -30, texto: 'Demasiados colores en la ropa' },
+    tresCapas: { ajuste: -8, texto: 'Base, jersey y cazadora de tres colores distintos: las capas no se hablan' },
     puntoFocal: { ajuste: -8, texto: 'Dos puntos focales: color protagonista y calzado llamativo' },
     todoOscuro: { ajuste: -10, texto: 'Todo oscuro: falta una prenda clara que levante el conjunto' },
-    tonos: { max: 4, ajuste: -6, texto: 'Demasiados tonos a la vista' },
     formalidad: { maxDif: 2, ajuste: -15, texto: 'Más de 2 puntos de diferencia de formalidad' },
     exteriorMismo: { ajuste: -8, texto: 'La cazadora no contrasta con' },
     exteriorContraste: { ajuste: 2, texto: 'La cazadora contrasta con el pantalón y con lo de arriba' },
@@ -670,19 +681,27 @@ function evaluar(o, M, ctx) {
     else add(C.reglas.camisetaJersey.ajuste, C.reglas.camisetaJersey.texto, 'capa');
   }
 
-  /* Protagonistas y punto focal */
+  /* Paleta: colores de la ropa (los tonos de un grupo cuentan como uno; el calzado de piel o zapatilla neutra y el calcetín no cuentan) */
   const ropa = [base, capa, ext, pant].filter(Boolean);
-  const prot = [...new Set(ropa.map(fam).filter(f => !C.neutros.includes(f)))];
-  if (prot.length > C.reglas.protagonistas.max) add(C.reglas.protagonistas.ajuste, `${C.reglas.protagonistas.texto} (${prot.join(', ')})`, 'protagonistas');
-  if (calz.llamativo && prot.length > 0) add(C.reglas.puntoFocal.ajuste, C.reglas.puntoFocal.texto, 'puntoFocal');
+  const grupo = p => C.grupos[fam(p)] || fam(p);
+  const colores = [...new Set(ropa.map(grupo))];
+  const P_ = C.reglas.paleta;
+  // Con 4 colores o más, las parejas sueltas que «casan» no compensan el conjunto: se anulan
+  if (colores.length >= 4) for (let i = notas.length - 1; i >= 0; i--) if (notas[i].regla === 'color' && notas[i].ajuste > 0) notas.splice(i, 1);
+  if (colores.length >= 5) add(P_.ajuste5, `${P_.texto} (${colores.length}: ${colores.join(', ')}). Máximo ${P_.max}, contando el blanco`, 'paleta');
+  else if (colores.length === 4) add(P_.ajuste4, `${P_.texto} (4: ${colores.join(', ')}). Máximo ${P_.max}, contando el blanco`, 'paleta');
+  else if (colores.length <= P_.corta && ropa.length >= 2) add(P_.bonus, `${P_.textoCorta} (${colores.join(' y ')})`, 'paleta');
+  if (capa && ext) {
+    const g3 = [base, capa, ext].map(grupo).filter(g => g !== 'blanco');
+    if (g3.length === 3 && new Set(g3).size === 3) add(C.reglas.tresCapas.ajuste, C.reglas.tresCapas.texto, 'capas');
+  }
+  /* Un solo color de acento */
+  const acentos = [...new Set(ropa.map(fam).filter(f => C.acentos.includes(f)).map(f => C.grupos[f] || f))];
+  if (acentos.length > C.reglas.acentos.max) add(C.reglas.acentos.ajuste, `${C.reglas.acentos.texto} (${acentos.join(', ')})`, 'acentos');
+  if (calz.llamativo && acentos.length > 0) add(C.reglas.puntoFocal.ajuste, C.reglas.puntoFocal.texto, 'puntoFocal');
 
   /* Todo oscuro */
   if (ropa.every(oscura)) add(C.reglas.todoOscuro.ajuste, C.reglas.todoOscuro.texto, 'oscuro');
-
-  /* Tonos a la vista (ropa + calzado; el calcetín no cuenta). Cognac y marrón oscuro cuentan como marrón */
-  const tono = p => { const f = fam(p); return f === 'cognac' || f === 'marrón oscuro' ? 'marrón' : f; };
-  const tonos = [...new Set([base, capa, ext, pant, calz].filter(Boolean).map(tono))];
-  if (tonos.length > C.reglas.tonos.max) add(C.reglas.tonos.ajuste, `${C.reglas.tonos.texto} (${tonos.length}: ${tonos.join(', ')})`, 'tonos');
 
   /* Formalidad */
   const conF = [base, capa, ext, pant, calz].filter(p => p && p.formalidad != null);
@@ -1012,6 +1031,18 @@ function runTests(silencioso) {
     // Caso real (21-10-2026): todo oscuro, correcto pero plano
     const plano = evaluar({ base: 'polo-verde', pantalon: 'ch-marino', calzado: 'zap-derby-oscuro', calcetin: 'calc-negro' }, M);
     ok('Polo verde oliva + chino marino + derby oscuro: «Pega con matices»', plano.veredicto === 'Pega con matices', `${plano.nota} · ${plano.veredicto}`);
+    // Caso real (21-10-2026): la propuesta de 4 colores que no se hablan
+    const batiburrillo = evaluar({ base: 'polo-verde', capa: 'jer-gris', exterior: 'caz-beige', pantalon: 'ch-marino', calzado: 'zap-derby-cognac', calcetin: 'calc-negro' }, M);
+    ok('Polo oliva + jersey gris + cazadora beige + chino marino: «No pega»', batiburrillo.nota < 65, `${batiburrillo.nota} · ${batiburrillo.veredicto}`);
+    // Ninguna propuesta de HOY lleva más de 3 colores en la ropa
+    let maxColores = 0;
+    for (const ts of [6, 12, 17, 22]) for (const tipoDia of ['reunion', 'normal', 'casual']) {
+      for (const x of proponer(clonar(INVENTARIO_BASE), { tiempo: { ts, tmax: ts + 6, lluvia: 0 }, tipoDia, mes: 10 }, 3).propuestas) {
+        const ropa = [x.o.base, x.o.capa, x.o.exterior, x.o.pantalon].filter(Boolean).map(id => M[id]);
+        maxColores = Math.max(maxColores, new Set(ropa.map(p => CONFIG.grupos[fam(p)] || fam(p))).size);
+      }
+    }
+    ok('Las propuestas de HOY no pasan de 3 colores en la ropa', maxColores <= 3, `máximo: ${maxColores}`);
     // No disponible nunca aparece en HOY (varios tiempos y tipos de día)
     const inv2 = clonar(INVENTARIO_BASE); inv2.find(p => p.id === 'z-celeste').disponible = false; inv2.find(p => p.id === 'ch-gris').disponible = false;
     let aparece = false, vacias = 0;

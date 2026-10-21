@@ -122,6 +122,13 @@ main.view { max-width: 600px; margin: 0 auto; padding: 14px max(16px, var(--sar)
 .frase { font-size: .93rem; line-height: 1.45; }
 .frase b { font-weight: 600; }
 .worn { color: var(--ok); font-weight: 600; font-size: .9rem; }
+.tag-fija { color: var(--accent); font-weight: 700; }
+.piece.fija .pn { font-weight: 600; }
+.fijas-info { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .85rem; color: var(--soft); margin-top: -4px; }
+.alt-txt { display: grid; gap: 2px; min-width: 0; }
+.alt-sub { line-height: 1.3; }
+.chip-n { font-family: var(--f-mono); font-size: .75rem; font-weight: 600; padding: 1px 6px; border-radius: 999px; margin-left: 2px; }
+.chip-n.ok { background: var(--ok-bg); color: var(--ok); } .chip-n.warn { background: var(--warn-bg); color: var(--warn); } .chip-n.bad { background: var(--bad-bg); color: var(--bad); }
 
 /* Figura */
 svg.fig { display: block; width: 100%; height: auto; }
@@ -262,8 +269,14 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V2.0';
+const VERSION = 'V2.1';
 const CAMBIOS = {
+  'V2.1': [
+    'Hoy: la pieza que eliges pasa a «Elegida» y manda. El resto se ajusta a ella y las alternativas de cada hueco se ordenan según cómo quedan con lo que has elegido.',
+    'Las piezas sugeridas solo cambian si el outfit mejora al menos 3 puntos. Al lado de cada alternativa ves qué más cambiaría.',
+    '«Otra propuesta» mantiene lo que has elegido. «Soltar» devuelve la libertad a la app.',
+    'Probador: cada opción muestra la nota que tendría el outfit y va ordenada de mejor a peor.'
+  ],
   'V2.0': [
     'Criterio de color rehecho con guías de moda masculina: el motor juzga el conjunto, no solo parejas sueltas.',
     'Paleta: máximo 3 colores en la ropa (los tonos de un mismo color cuentan como uno; calzado y calcetín no cuentan). Con 4, no pega.',
@@ -448,6 +461,8 @@ const CONFIG = {
   variedadPenal: 2,
   // Videollamada: formalidad mínima de la parte de arriba
   videollamadaF: 3,
+  // Piezas elegidas por el usuario: al completar el resto, una pieza sugerida solo cambia si el outfit gana al menos esto
+  cambioMinimo: 3,
   // Mejora del probador: ganancia mínima para sugerirla
   mejoraMinima: 3
 };
@@ -952,6 +967,47 @@ function proponerVideollamada(prendas, ctx, n) {
   return n === Infinity ? res : elegirVariadas(res, n || 3);
 }
 
+/* ---------- Piezas elegidas (fijadas) ----------
+   fijas: { hueco: id | null } que el usuario ha elegido. Mandan sobre todo lo demás.
+   Las piezas sugeridas por la app (actual) se conservan salvo que cambiarlas mejore la nota en CFG.cambioMinimo o más. */
+function cumpleFijas(o, fijas) {
+  for (const k of Object.keys(fijas || {})) if ((o[k] || null) !== (fijas[k] || null)) return false;
+  return true;
+}
+// El calcetín no cuenta para la estabilidad: siempre se ajusta al pantalón y al calzado
+function enComun(o, actual) { return actual ? HUECOS.filter(h => h.k !== 'calcetin' && (o[h.k] || null) === (actual[h.k] || null)).length : 0; }
+// lista: combinaciones válidas ordenadas de mejor a peor (generar o proponerVideollamada con n = Infinity)
+function mejorConFijas(lista, fijas, actual) {
+  let top = null;
+  const cand = [];
+  for (const r of lista) {
+    if (!cumpleFijas(r.o, fijas)) continue;
+    if (!top) top = r.nota;
+    if (r.nota < top - CFG.cambioMinimo) break;
+    cand.push(r);
+  }
+  if (!cand.length) return null;
+  // Entre las que están a menos de cambioMinimo de la mejor: la que más piezas conserva; luego la de mejor nota
+  cand.sort((a, b) => enComun(b.o, actual) - enComun(a.o, actual) || b.nota - a.nota || (b.bruto || 0) - (a.bruto || 0));
+  return cand[0];
+}
+// Alternativas para un hueco, ordenadas por cómo queda el outfit completo respetando lo elegido
+function alternativasHueco(lista, hueco, fijas, actual) {
+  const porId = new Map();
+  for (const r of lista) {
+    const id = r.o[hueco] || null;
+    if (porId.has(id) || !cumpleFijas(r.o, Object.assign({}, fijas, { [hueco]: id }))) continue;
+    porId.set(id, true);
+  }
+  const res = [];
+  for (const id of porId.keys()) {
+    const r = mejorConFijas(lista, Object.assign({}, fijas, { [hueco]: id }), actual);
+    if (r) res.push({ id, r, cambia: HUECOS.filter(h => h.k !== hueco && (r.o[h.k] || null) !== ((actual || {})[h.k] || null)).map(h => h.k) });
+  }
+  res.sort((a, b) => b.r.nota - a.r.nota || a.cambia.length - b.cambia.length);
+  return res;
+}
+
 /* Mejor cambio de una sola pieza (probador) */
 function mejorMejora(o, prendas, ctx) {
   const M = mapa(prendas), act = disponibles(prendas);
@@ -1043,6 +1099,15 @@ function runTests(silencioso) {
       }
     }
     ok('Las propuestas de HOY no pasan de 3 colores en la ropa', maxColores <= 3, `máximo: ${maxColores}`);
+    // Piezas elegidas: mandan, y el resto se ajusta sin cambios innecesarios
+    const ctxF = { tiempo: { ts: 13, tmax: 20, lluvia: 0 }, tipoDia: 'normal', mes: 10 };
+    const listaF = generar(clonar(INVENTARIO_BASE), ctxF);
+    const actualF = listaF[0].o;
+    const conBeige = mejorConFijas(listaF, { pantalon: 'ch-beige' }, actualF);
+    const maxBeige = Math.max(...listaF.filter(x => x.o.pantalon === 'ch-beige').map(x => x.nota));
+    ok('Al elegir un pantalón, el resto se ajusta a él', conBeige && conBeige.o.pantalon === 'ch-beige' && conBeige.nota >= maxBeige - CONFIG.cambioMinimo, conBeige ? `${conBeige.nota} (máx. ${maxBeige})` : 'sin resultado');
+    const altsF = alternativasHueco(listaF, 'calzado', { pantalon: 'ch-beige' }, conBeige.o);
+    ok('Las alternativas de otro hueco respetan lo elegido y van ordenadas', altsF.length > 0 && altsF.every(a => a.r.o.pantalon === 'ch-beige') && altsF.every((a, j) => j === 0 || altsF[j - 1].r.nota >= a.r.nota), altsF.map(a => `${a.id} ${a.r.nota}`).join(' · '));
     // No disponible nunca aparece en HOY (varios tiempos y tipos de día)
     const inv2 = clonar(INVENTARIO_BASE); inv2.find(p => p.id === 'z-celeste').disponible = false; inv2.find(p => p.id === 'ch-gris').disponible = false;
     let aparece = false, vacias = 0;
@@ -1245,7 +1310,7 @@ function tiempoPara(fecha) {
 }
 
 /* ---------- Estado de interfaz ---------- */
-const UI = { vista: 'hoy', dia: 0, tipoDia: 'normal', cache: null, cards: null, vistos: [], video: false, filtro: 'todas', toques: 0, testsVisibles: false, tests: null, buenos: null, buenosKey: '' };
+const UI = { vista: 'hoy', dia: 0, tipoDia: 'normal', cache: null, cards: null, fijas: {}, vistos: [], video: false, filtro: 'todas', toques: 0, testsVisibles: false, tests: null, buenos: null, buenosKey: '' };
 const params = new URLSearchParams(location.search);
 if (params.has('hoy')) { UI.vista = 'hoy'; UI.dia = 0; }
 
@@ -1266,13 +1331,27 @@ function asegurarPropuestas() {
   if (esOficina(fecha) && !UI.video) {
     r = proponer(S.prendas, ctx, 3);
   } else if (UI.video) {
-    r = { lista: [], propuestas: proponerVideollamada(S.prendas, ctx, 3), abrigo: false };
+    const lista = proponerVideollamada(S.prendas, ctx, Infinity);
+    r = { lista, propuestas: elegirVariadas(lista, 3), abrigo: false };
   } else r = { lista: [], propuestas: [], abrigo: false };
   UI.cache = { k, ctx, lista: r.lista, abrigo: r.abrigo };
-  UI.cards = r.propuestas.slice();
-  UI.vistos = r.propuestas.map(x => x.clave);
+  // Las piezas que elegiste en cada propuesta se respetan aunque cambie el tipo de día o el tiempo
+  const fk = claveFijas(), previas = UI.fijas[fk] || [], tarjetasPrevias = UI.cards || [];
+  const cards = [], nuevasFijas = [];
+  previas.forEach((f, i) => {
+    if (!f || !Object.keys(f).length) return;
+    const c = mejorConFijas(r.lista, f, tarjetasPrevias[i] && tarjetasPrevias[i].o);
+    if (c) { cards[i] = c; nuevasFijas[i] = f; }
+  });
+  const libres = elegirVariadas(r.lista, 3 - cards.filter(Boolean).length, [], cards.filter(Boolean));
+  for (let i = 0; i < 3; i++) if (!cards[i] && libres.length) cards[i] = libres.shift();
+  UI.cards = cards.filter(Boolean);
+  UI.fijas[fk] = nuevasFijas;
+  UI.vistos = UI.cards.map(x => x.clave);
   return UI.cache;
 }
+function claveFijas() { return fechaVista() + (UI.video ? '|v' : '|o'); }
+function fijasDe(i) { const fk = claveFijas(); UI.fijas[fk] = UI.fijas[fk] || []; return UI.fijas[fk][i] || (UI.fijas[fk][i] = {}); }
 
 /* ---------- Figura ---------- */
 let gid = 0;
@@ -1390,17 +1469,20 @@ function vistaHoy() {
 function tarjeta(c, i, Mp, ctx, usoHoy) {
   const puesto = usoHoy && claveOutfit(usoHoy.o || {}) === c.clave;
   const huecos = UI.video ? HUECOS.filter(x => x.k === 'base' || x.k === 'capa') : HUECOS;
+  const fijas = (UI.fijas[claveFijas()] || [])[i] || {};
+  const nFijas = Object.keys(fijas).length;
   const piezas = huecos.filter(x => c.o[x.k]).map(x => {
-    const p = Mp[x.k ? c.o[x.k] : null];
-    return `<li><button class="piece" type="button" data-act="pieza" data-i="${i}" data-h="${x.k}">${dotHTML(p)}<span class="pn">${esc(p.nombre)}</span><span class="ps">${esc(x.label)}<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></span></button></li>`;
+    const p = Mp[c.o[x.k]], elegida = x.k in fijas;
+    return `<li><button class="piece${elegida ? ' fija' : ''}" type="button" data-act="pieza" data-i="${i}" data-h="${x.k}">${dotHTML(p)}<span class="pn">${esc(p.nombre)}</span><span class="ps">${elegida ? '<b class="tag-fija">Elegida</b>' : esc(x.label)}<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></span></button></li>`;
   }).join('');
+  const avisoFijas = nFijas ? `<div class="fijas-info"><span>El resto se ajusta a ${nFijas === 1 ? 'la pieza que has elegido' : `las ${nFijas} piezas que has elegido`}.</span><button class="linkbtn" type="button" data-act="soltar-todo" data-i="${i}">Soltar</button></div>` : '';
   const frase = UI.video ? (c.notas[0] ? c.notas[0].texto + '.' : 'Limpio y correcto para cámara.') + (c.o.capa ? ' Cuello por fuera del jersey.' : '') : fraseEstilista(c.o, Mp, c, ctx);
   const veredicto = c.veredicto || (c.nota >= CFG.veredicto.pega ? 'Pega' : c.nota >= CFG.veredicto.matices ? 'Pega con matices' : 'No pega');
   return `<article class="card prop">
     <div class="prop-top"><div>${figura(c.o, Mp)}</div>
       <div class="score"><span class="title">Propuesta ${i + 1}</span><div class="num">${c.nota}<small>/100</small></div>
         <div class="row"><span class="pill ${vClase(veredicto)}">${veredicto}</span>${c.ocasion && !UI.video ? `<span class="pill occ">${esc(c.ocasion)}</span>` : ''}</div></div></div>
-    <ul class="pieces">${piezas}</ul>
+    <ul class="pieces">${piezas}</ul>${avisoFijas}
     <p class="frase">${esc(frase)}</p>
     <div class="actions">${puesto ? `<button class="btn" type="button" data-act="deshacer-uso">Puesto ✓ · Deshacer</button>` : `<button class="btn primary" type="button" data-act="melopongo" data-i="${i}">Me lo pongo</button>`}
       <button class="btn" type="button" data-act="otra" data-i="${i}">Otra propuesta</button></div>
@@ -1423,34 +1505,23 @@ function favoritosHoy(fecha, Mp, cache) {
       <button class="btn" type="button" data-act="fav-poner" data-id="${esc(f.id)}">Me lo pongo</button></div>`).join('')}</section>`;
 }
 function hojaPieza(i, h) {
-  const c = UI.cards[i], Mp = M(), id = c.o[h], p = Mp[id], fecha = fechaVista(), ctx = UI.cache.ctx;
+  const c = UI.cards[i], Mp = M(), id = c.o[h], p = Mp[id];
   const hueco = HUECOS.find(x => x.k === h);
-  const permitidas = UI.video ? null : CFG.tipoDia[UI.tipoDia].ocasiones;
-  const opciones = [...(hueco.opcional ? [null] : []), ...S.prendas.filter(x => x.hueco === h && x.disponible && !x.archivada).map(x => x.id)];
-  const alts = [];
-  for (const nid of opciones) {
-    const o = Object.assign({}, c.o, { [h]: nid });
-    if (UI.video) {
-      if (!nid && h === 'base') continue;
-      if (nid && Mp[nid].formalidad < CFG.videollamadaF) continue;
-      const e = evaluarArriba(o, Mp, ctx);
-      alts.push({ id: nid, o, nota: e.nota, ev: e });
-      continue;
-    }
-    if (!encajaTiempo(o, Mp, ctx.tiempo, ctx.umbrales).ok) continue;
-    const e = evaluar(o, Mp, ctx);
-    if (permitidas && !permitidas.includes(e.ocasion)) continue;
-    alts.push({ id: nid, o, nota: e.nota, ev: e });
-  }
-  alts.sort((a, b) => (b.nota || 0) - (a.nota || 0));
-  return `<div class="sheet-head"><div><div class="eyebrow">${esc(hueco.label)}</div><h2>${esc(p.nombre)}</h2></div><button class="btn sm ghost" type="button" data-act="cerrar">Cerrar</button></div>
+  const fijas = Object.assign({}, fijasDe(i)); delete fijas[h];
+  const elegida = h in fijasDe(i);
+  const alts = alternativasHueco(UI.cache.lista, h, fijas, c.o);
+  const nOtras = Object.keys(fijas).length;
+  const subt = nOtras ? `ordenadas según cómo quedan con ${nOtras === 1 ? 'la pieza que has elegido' : `las ${nOtras} piezas que has elegido`}` : 'ordenadas según cómo queda el outfit completo';
+  return `<div class="sheet-head"><div><div class="eyebrow">${esc(hueco.label)}${elegida ? ' · elegida por ti' : ''}</div><h2>${esc(p.nombre)}</h2></div><button class="btn sm ghost" type="button" data-act="cerrar">Cerrar</button></div>
     <div class="card"><div class="switch-row"><div><b>Disponible</b><div class="small muted">Desmárcala si está para lavar. Las propuestas se recalculan al momento.</div></div>
-      <label class="switch"><input type="checkbox" data-chg="disp-hoy" data-id="${esc(id)}" ${p.disponible ? 'checked' : ''} aria-label="Disponible"><span class="track"></span></label></div></div>
-    <h3>Cambiar por… <span class="muted small">(el resto se mantiene)</span></h3>
+      <label class="switch"><input type="checkbox" data-chg="disp-hoy" data-id="${esc(id)}" ${p.disponible ? 'checked' : ''} aria-label="Disponible"><span class="track"></span></label></div>
+      ${elegida ? `<div class="switch-row"><div class="small muted">La has elegido tú: el resto se ajusta a ella.</div><button class="btn sm" type="button" data-act="soltar" data-i="${i}" data-h="${h}">Soltar</button></div>` : `<div class="switch-row"><div class="small muted">Me la quedo y que el resto se ajuste a ella.</div><button class="btn sm" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${esc(id || '')}">Elegir</button></div>`}</div>
+    <h3>Cambiar por… <span class="muted small">(${subt})</span></h3>
     <div class="stack">${alts.length ? alts.map(a => {
-      const q = a.id ? Mp[a.id] : null;
-      return `<button class="alt${a.id === id ? ' cur' : ''}" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${a.id || ''}">${dotHTML(q)}<span>${esc(q ? q.nombre : hueco.sin)}${a.id === id ? ' <span class="muted small">· actual</span>' : ''}</span>${a.nota != null ? `<span class="pill ${vClase(a.ev.veredicto)}">${a.nota}</span>` : ''}</button>`;
-    }).join('') : '<p class="muted">No hay alternativas que encajen con el tiempo y el tipo de día.</p>'}</div>`;
+      const q = a.id ? Mp[a.id] : null, actual = a.id === (id || null);
+      const tambien = a.cambia.length ? `<span class="small muted alt-sub">También cambia: ${esc(a.cambia.map(k => a.r.o[k] ? Mp[a.r.o[k]].nombre : HUECOS.find(x => x.k === k).sin).join(' · '))}</span>` : '';
+      return `<button class="alt${actual ? ' cur' : ''}" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${a.id || ''}">${dotHTML(q)}<span class="alt-txt"><span>${esc(q ? q.nombre : hueco.sin)}${actual ? ' <span class="muted small">· actual</span>' : ''}</span>${tambien}</span><span class="pill ${vClase(a.r.veredicto)}">${a.r.nota}</span></button>`;
+    }).join('') : '<p class="muted">No hay alternativas que encajen con el tiempo, el tipo de día y lo que has elegido.</p>'}</div>`;
 }
 
 /* ---------- PROBADOR ---------- */
@@ -1480,11 +1551,21 @@ function vistaProbador() {
     h += `<div class="notice info">Elige base, pantalón, calzado y calcetín para ver la nota.</div>`;
   }
   if (completo) { const e2 = evaluar(o, Mp); h += `<div class="sticky-score" aria-hidden="true"><span><b>${e2.nota}</b><span class="muted small">/100</span></span><span class="row"><span class="pill ${vClase(e2.veredicto)}">${e2.veredicto}</span><button class="btn sm ghost" type="button" data-act="arriba">Ver detalle</button></span></div>`; }
+  // Cada opción se ordena por la nota que tendría el outfit con ella y con el resto de lo que has elegido
+  if (completo) h += `<p class="small muted">En cada fila, primero lo que mejor queda con el resto de lo que has elegido. El número es la nota que tendría el outfit.</p>`;
   for (const hu of HUECOS) {
-    const lista = S.prendas.filter(p => p.hueco === hu.k && !p.archivada);
+    let lista = S.prendas.filter(p => p.hueco === hu.k && !p.archivada).map(p => ({ p, id: p.id }));
+    if (hu.opcional) lista.unshift({ p: null, id: null });
+    if (completo) {
+      lista.forEach(x => { x.nota = evaluar(Object.assign({}, o, { [hu.k]: x.id }), Mp).nota; });
+      lista.sort((a, b) => (b.p ? (b.p.disponible ? 1 : 0) : 1) - (a.p ? (a.p.disponible ? 1 : 0) : 1) || b.nota - a.nota);
+    }
     h += `<section class="slot"><h3>${esc(hu.label)}${hu.opcional ? ' <span class="muted small">(opcional)</span>' : ''}</h3><div class="chips">
-      ${hu.opcional ? `<button type="button" class="chip none" data-act="elegir" data-h="${hu.k}" data-id="" aria-pressed="${!o[hu.k]}"><span class="dot"></span>${esc(hu.sin)}</button>` : ''}
-      ${lista.map(p => `<button type="button" class="chip${p.disponible ? '' : ' off'}" data-act="elegir" data-h="${hu.k}" data-id="${esc(p.id)}" aria-pressed="${o[hu.k] === p.id}">${dotHTML(p)}<span>${esc(p.nombre)}${p.disponible ? '' : ' · no disp.'}</span></button>`).join('')}
+      ${lista.map(x => {
+        const sel = (o[hu.k] || null) === x.id, badge = x.nota != null ? `<span class="chip-n ${vClase(x.nota >= CFG.veredicto.pega ? 'Pega' : x.nota >= CFG.veredicto.matices ? 'Pega con matices' : 'No pega')}">${x.nota}</span>` : '';
+        if (!x.p) return `<button type="button" class="chip none" data-act="elegir" data-h="${hu.k}" data-id="" aria-pressed="${sel}"><span class="dot"></span>${esc(hu.sin)}${badge}</button>`;
+        return `<button type="button" class="chip${x.p.disponible ? '' : ' off'}" data-act="elegir" data-h="${hu.k}" data-id="${esc(x.id)}" aria-pressed="${sel}">${dotHTML(x.p)}<span>${esc(x.p.nombre)}${x.p.disponible ? '' : ' · no disp.'}</span>${badge}</button>`;
+      }).join('')}
     </div></section>`;
   }
   if (S.favoritos.length) {
@@ -1714,17 +1795,26 @@ const ACT = {
   'recargar-tiempo'() { cerrarHoja(); cargarTiempo(true); render(); },
   pieza(el) { UI.hojaPieza = { i: +el.dataset.i, h: el.dataset.h }; abrirHoja(hojaPieza(+el.dataset.i, el.dataset.h)); },
   cambiar(el) {
-    const i = +el.dataset.i, h = el.dataset.h, id = el.dataset.id || null, c = UI.cards[i], Mp = M();
-    const o = Object.assign({}, c.o, { [h]: id });
-    UI.cards[i] = Object.assign({ o, clave: claveOutfit(o) }, UI.video ? evaluarArriba(o, Mp, UI.cache.ctx) : evaluar(o, Mp, UI.cache.ctx));
+    // La pieza tocada pasa a ser «elegida»: manda, y las sugeridas se ajustan a ella (solo si ganan al menos CFG.cambioMinimo)
+    const i = +el.dataset.i, h = el.dataset.h, id = el.dataset.id || null, c = UI.cards[i];
+    const fijas = fijasDe(i); fijas[h] = id;
+    const r = mejorConFijas(UI.cache.lista, fijas, c.o);
+    if (!r) { delete fijas[h]; toast('Esa pieza no encaja con el tiempo o el tipo de día'); return; }
+    const cambiadas = HUECOS.filter(x => x.k !== h && (r.o[x.k] || null) !== (c.o[x.k] || null)).length;
+    UI.cards[i] = r; UI.vistos.push(r.clave);
     cerrarHoja(); render();
+    if (cambiadas) toast(`${cambiadas === 1 ? "Ajustada 1 pieza" : `Ajustadas ${cambiadas} piezas`} a tu elección`);
   },
+  soltar(el) { const i = +el.dataset.i; delete fijasDe(i)[el.dataset.h]; cerrarHoja(); render(); },
+  'soltar-todo'(el) { const fk = claveFijas(); if (UI.fijas[fk]) UI.fijas[fk][+el.dataset.i] = {}; render(); toast('Piezas soltadas: la app vuelve a elegir libremente'); },
   melopongo(el) { const c = UI.cards[+el.dataset.i]; registrarUso(c.o, UI.video ? 'videollamada' : UI.tipoDia); },
   'deshacer-uso'() { const f = fechaVista(); S.usos = S.usos.filter(u => u.fecha !== f); guardar(); render(); },
   otra(el) {
     const i = +el.dataset.i;
     const otras = UI.cards.filter((_, j) => j !== i);
-    const lista = UI.video ? proponerVideollamada(S.prendas, UI.cache.ctx, Infinity) : UI.cache.lista;
+    // Si has elegido piezas en esta propuesta, la siguiente las mantiene
+    const f = (UI.fijas[claveFijas()] || [])[i] || {};
+    const lista = UI.cache.lista.filter(x => cumpleFijas(x.o, f));
     let r = elegirVariadas(lista, 1, UI.vistos, otras)[0];
     if (!r) { UI.vistos = UI.cards.map(x => x.clave); r = elegirVariadas(lista, 1, UI.vistos, otras)[0]; if (r) toast('Vuelvo a empezar la lista'); }
     if (!r) { toast('No hay más propuestas distintas con este tiempo'); return; }
@@ -1881,7 +1971,9 @@ function pintarPersistencia() {
 function registrarSW() {
   if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
   let recargando = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (recargando) return; recargando = true; location.reload(); });
+  // Solo se recarga al pasar a una versión nueva, no en la primera instalación (que también cambia de controlador)
+  const habiaControlador = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (recargando || !habiaControlador) return; recargando = true; location.reload(); });
   navigator.serviceWorker.register('sw.js').then(reg => {
     const avisar = w => { $('#update').hidden = false; $('#update-btn').onclick = () => { $('#update-btn').disabled = true; w.postMessage('SKIP_WAITING'); }; };
     if (reg.waiting && navigator.serviceWorker.controller) avisar(reg.waiting);

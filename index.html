@@ -262,8 +262,14 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V1.0';
+const VERSION = 'V1.1';
 const CAMBIOS = {
+  'V1.1': [
+    'Prendas confirmadas: polo verde oliva de punto, polos negro y marino de piqué, jersey marino Tommy Hilfiger, merino rojo Uniqlo col.17 y derbys sintéticos con aspecto ante.',
+    'Cinturones: la frase de estilista dice cuál ponerse (marrón de ante con derbys, chino beige o vaqueros; negro con zapatilla y chino negro, gris o marino).',
+    'El asistente ya no pregunta lo que está confirmado.',
+    'Tus datos guardados se actualizan solos al abrir esta versión.'
+  ],
   'V1.0': [
     'Primera versión: Hoy, Probador, Armario y Ajustes.',
     'Motor nuevo con todas las reglas del inventario (color, calzado, calcetines, fit, lluvia, tiempo, rotación).',
@@ -462,9 +468,9 @@ function P(id, nombre, hueco, tipo, familia, hex, F, A, extra) {
 }
 const OCT_ABR = [10, 11, 12, 1, 2, 3, 4], MAR_OCT = [3, 4, 5, 6, 7, 8, 9, 10];
 const INVENTARIO_BASE = [
-  P('polo-negro', 'Polo negro', 'base', 'polo', 'negro', '#1c1c1f', 3, 1, { manga: 'corta' }),
-  P('polo-marino', 'Polo marino', 'base', 'polo', 'marino', '#283452', 3, 1, { manga: 'corta' }),
-  P('polo-verde', 'Polo verde', 'base', 'polo', 'verde', '#3f5d49', 3, 1, { manga: 'corta', notas: 'Tono supuesto: verde botella' }),
+  P('polo-negro', 'Polo negro', 'base', 'polo', 'negro', '#1c1c1f', 3, 1, { manga: 'corta', material: 'Piqué' }),
+  P('polo-marino', 'Polo marino', 'base', 'polo', 'marino', '#283452', 3, 1, { manga: 'corta', material: 'Piqué' }),
+  P('polo-verde', 'Polo verde oliva', 'base', 'polo', 'verde', '#5a5d3c', 3, 1, { manga: 'corta', material: 'Punto', notas: 'Verde oliva' }),
   P('z-tostado', 'Polo punto tostado', 'base', 'polo-punto', 'marrón', '#a77c57', 4, 1, { manga: 'corta', material: '90% algodón, 10% seda', cuidados: 'Lavado delicado', tienda: 'Zara', ref: '6674/445', compra: '2026-10-21' }),
   P('z-marron', 'Polo punto marrón oscuro', 'base', 'polo-punto', 'marrón', '#4f3627', 4, 1, { manga: 'corta', material: '90% algodón, 10% seda', cuidados: 'Lavado delicado', tienda: 'Zara', ref: '6674/445', compra: '2026-10-21' }),
   P('z-celeste', 'Polo punto ligero celeste', 'base', 'polo-punto', 'azul cielo', '#9fc4e2', 4, 1, { manga: 'corta', temporadas: MAR_OCT, material: '73% algodón, 17% lino, 10% seda', notas: 'Arruga algo', tienda: 'Zara', ref: '0077/303', compra: '2026-10-21' }),
@@ -474,8 +480,8 @@ const INVENTARIO_BASE = [
   P('camisa-celeste', 'Camisa azul claro', 'base', 'camisa', 'azul cielo', '#bcd3ea', 5, 1, { manga: 'larga', notas: 'Siempre por dentro' }),
   P('jer-negro', 'Jersey negro', 'capa', 'jersey', 'negro', '#222225', 4, 2),
   P('jer-gris', 'Jersey gris', 'capa', 'jersey', 'gris', '#7d8186', 4, 2),
-  P('jer-blancomarino', 'Jersey blanco/marino', 'capa', 'jersey', 'marino+blanco', '#f1f0ec', 4, 2, { hex2: '#2a3550', notas: 'Supuesto: 1 jersey bicolor' }),
-  P('u-merino-rojo', 'Jersey merino granate', 'capa', 'jersey', 'granate', '#8a2a33', 4, 2, { temporadas: OCT_ABR, material: '100% merino extrafino', cuidados: 'Lavar a 40 °C como máximo · sin secadora', tienda: 'Uniqlo', ref: 'E450535-000 col.17', notas: 'Cuello redondo', compra: '2026-10-21' }),
+  P('jer-marino', 'Jersey marino Tommy Hilfiger', 'capa', 'jersey', 'marino', '#1e2640', 4, 2, { tienda: 'Tommy Hilfiger', notas: '95% marino · detalle blanco en cuello y puños' }),
+  P('u-merino-rojo', 'Jersey merino rojo', 'capa', 'jersey', 'granate', '#8c1626', 4, 2, { temporadas: OCT_ABR, material: '100% merino extrafino', cuidados: 'Lavar a 40 °C como máximo · sin secadora', tienda: 'Uniqlo', ref: 'E450535-000 col.17', notas: 'Cuello redondo · rojo intenso, entre granate y rojo: usa las reglas del granate', compra: '2026-10-21' }),
   P('u-merino-marron', 'Jersey merino marrón oscuro', 'capa', 'jersey', 'marrón', '#4a3528', 4, 2, { temporadas: OCT_ABR, material: '100% merino extrafino', cuidados: 'Lavar a 40 °C como máximo · sin secadora', tienda: 'Uniqlo', ref: 'E450535-000 col.38', notas: 'Cuello redondo', compra: '2026-10-21' }),
   P('caz-beige', 'Cazadora beige', 'exterior', 'cazadora', 'beige', '#c9b48f', 3, 2),
   P('u-harrington', 'Harrington azul marino', 'exterior', 'cazadora', 'marino', '#232e44', 3, 2, { material: '50% algodón, 50% poliéster', cuidados: 'Lavar a mano en frío', tienda: 'Uniqlo', ref: 'E484610-000 col.69', notas: 'Corte relax · aguanta llovizna', compra: '2026-10-21' }),
@@ -487,12 +493,39 @@ const INVENTARIO_BASE = [
   P('mr530', 'New Balance MR530 beige', 'calzado', 'zapatilla', 'beige', '#d8ccb5', 2, 0),
   P('u740', 'New Balance U740 blancas/grises', 'calzado', 'zapatilla', 'blanco', '#ebebe8', 2, 0, { hex2: '#a9adb2', notas: 'Zapatilla comodín' }),
   P('vans', 'Vans negras/blancas', 'calzado', 'zapatilla', 'negro', '#1b1b1d', 1, 0, { hex2: '#f4f4f2', material: 'Lona', notas: 'Solo casual' }),
-  P('zap-derby-cognac', 'Derby liso cognac', 'calzado', 'derby', 'cognac', '#8b5a35', 4, 0, { material: 'Aspecto ante', tienda: 'Pier One (Zalando)', notas: 'Suela oscura fina con canto marrón' }),
-  P('zap-derby-oscuro', 'Derby marrón oscuro', 'calzado', 'derby', 'marrón oscuro', '#4a3226', 3, 0, { material: 'Aspecto ante', tienda: 'Pier One (Zalando)', notas: 'Punta mocasín · suela dentada gruesa con buen agarre' }),
+  P('zap-derby-cognac', 'Derby liso cognac', 'calzado', 'derby', 'cognac', '#75502f', 4, 0, { material: 'Sintético, aspecto ante', tienda: 'Pier One (Zalando)', ref: 'PI912C0GX-O11', notas: 'Suela oscura fina con canto marrón' }),
+  P('zap-derby-oscuro', 'Derby marrón oscuro', 'calzado', 'derby', 'marrón oscuro', '#4a3226', 3, 0, { material: 'Sintético, aspecto ante', tienda: 'Pier One (Zalando)', ref: 'PI915C014-O11', notas: 'Punta mocasín · suela negra dentada gruesa con buen agarre' }),
   P('calc-negro', 'Calcetines negros', 'calcetin', 'calcetin', 'negro', '#1b1b1d', null, 0),
   P('calc-gris', 'Calcetines grises', 'calcetin', 'calcetin', 'gris', '#8a8d90', null, 0),
   P('calc-blanco', 'Calcetines blancos', 'calcetin', 'calcetin', 'blanco', '#f2f2f0', null, 0)
 ];
+
+/* Cinturones (no son hueco del outfit: solo entran en la frase de estilista) */
+const CINTURONES = {
+  marron: 'cinturón marrón de ante',
+  negro: 'cinturón negro'
+};
+// Con zapato marrón, el marrón. Con zapatilla, el negro, salvo con chino beige o vaqueros, donde el negro queda duro.
+const CINTURON_MARRON_CON_ZAPATILLA = ['beige', 'vaquero'];
+function cinturonPara(calz, pant) {
+  if (calz.tipo === 'derby') return CINTURONES.marron;
+  return CINTURON_MARRON_CON_ZAPATILLA.includes(fam(pant)) ? CINTURONES.marron : CINTURONES.negro;
+}
+const CINTURONES_TEXTO = 'Marrón de ante, ancho, hebilla plateada (Pier One PI952D048-O11) · negro de piel granulada, de vestir (Pier One PI954D01Z-Q11)';
+
+/* Correcciones de datos por versión: se aplican una vez a lo guardado en el iPhone */
+const DATOS_V = 2;
+const CORRECCIONES = {
+  2: {
+    renombrar: { 'jer-blancomarino': 'jer-marino' },
+    campos: {
+      'polo-negro': ['material'], 'polo-marino': ['material'], 'polo-verde': ['nombre', 'hex', 'material', 'notas'],
+      'jer-marino': ['nombre', 'familia', 'hex', 'hex2', 'tienda', 'notas'],
+      'u-merino-rojo': ['nombre', 'familia', 'hex', 'notas'],
+      'zap-derby-cognac': ['hex', 'material', 'ref', 'notas'], 'zap-derby-oscuro': ['material', 'ref', 'notas']
+    }
+  }
+};
 
 /* Apartado 8 · Outfits probados */
 const OUTFITS_PROBADOS = [
@@ -510,7 +543,7 @@ const OUTFITS_PROBADOS = [
   ['12', 'Tonal marrón', 'z-tostado', 'u-merino-marron', null, 'ch-beige', 'mr530', 'calc-gris', 'Smart casual'],
   ['13', 'Celeste y beige', 'z-celeste', null, 'u-harrington', 'ch-beige', 'zap-derby-cognac', 'calc-gris', 'Business casual'],
   ['14', 'Marrón y gris', 'z-marron', null, 'u-harrington', 'ch-gris', 'u740', 'calc-gris', 'Smart casual'],
-  ['15', 'Bicolor de oficina', 'camisa-blanca', 'jer-blancomarino', null, 'ch-gris', 'zap-derby-cognac', 'calc-gris', 'Business casual'],
+  ['15', 'Marino de oficina', 'camisa-blanca', 'jer-marino', null, 'ch-gris', 'zap-derby-cognac', 'calc-gris', 'Business casual'],
   ['16', 'Merino casual', 'u-supima', 'u-merino-marron', null, 'vaqueros', 'zap-derby-oscuro', 'calc-gris', 'Casual'],
   ['17', 'Blanco y negro', 'cam-negra', null, 'caz-beige', 'vaqueros', 'vans', 'calc-blanco', 'Casual'],
   ['18', 'Merino y negro', 'polo-negro', 'u-merino-rojo', null, 'ch-gris', 'u740', 'calc-gris', 'Smart casual']
@@ -548,7 +581,7 @@ function textura(p) {
   if (p.tipo === 'jersey' || p.tipo === 'polo-punto' || mat.includes('punto')) return 'punto';
   if (mat.includes('piqué') || mat.includes('pique')) return 'piqué';
   return { camisa: 'popelín', camiseta: 'algodón', polo: 'algodón', chino: 'sarga', vaquero: 'denim', cazadora: 'algodón', abrigo: 'lana', zapatilla: 'zapatilla' }[p.tipo]
-    || (p.tipo === 'derby' ? (mat.includes('sint') ? 'liso' : 'ante') : p.tipo);
+    || (p.tipo === 'derby' ? (/\bante\b/.test(mat) || !mat.includes('sint') ? 'ante' : 'liso') : p.tipo);
 }
 function cumple(cond, p) {
   if (!cond) return true;
@@ -921,8 +954,9 @@ function fraseEstilista(o, M, ev, ctx) {
   if (capa && (base.tipo === 'camisa' || base.tipo === 'polo' || base.tipo === 'polo-punto')) tips.push('cuello por fuera del jersey');
   if (capa && base.tipo === 'camiseta') tips.push('que asome solo un dedo de camiseta en el cuello');
   if (!capa && base.tipo === 'polo-punto') tips.push('polo por fuera si no pasa de media bragueta');
+  // Cinturón: solo si se ve (sin jersey y con la base por dentro o pudiendo ir por dentro)
+  if (!capa && base.tipo !== 'camiseta') tips.push(cinturonPara(calz, pant) + (base.tipo === 'camisa' ? '' : ' si se ve'));
   if (pant.tipo === 'chino') tips.push(calz.tipo === 'derby' ? 'chino sin pliegues sobre el zapato' : 'bajo del chino al tobillo o con una vuelta fina');
-  if (calz.tipo === 'derby' && (base.tipo === 'camisa' || !capa)) tips.push('cinturón marrón si se ve');
   const t = ctx && ctx.tiempo, u = (ctx && ctx.umbrales) || AJUSTES_BASE.umbrales;
   if (t && t.ts != null && t.tmax != null && Math.abs(t.tmax - t.ts) > u.difTrayecto && (capa || ext)) tips.unshift(ext ? 'cazadora fuera al llegar a Barcelona' : 'jersey fuera al llegar a Barcelona');
   const porque = buena ? buena.texto : (ev.nota >= CFG.veredicto.pega ? 'Combinación limpia y sin riesgos' : 'Correcto, sin más');
@@ -1016,7 +1050,7 @@ function fechaCorta(iso) { return new Intl.DateTimeFormat('es-ES', { day: 'numer
 /* ---------- Estado ---------- */
 function estadoNuevo() {
   return { v: 1, prendas: clonar(INVENTARIO_BASE), usos: [], favoritos: [], ajustes: clonar(AJUSTES_BASE),
-    tiempo: null, tiempoManual: {}, onboarded: false, confirmados: {}, oficinaForzada: {}, probador: clonar(OUTFITS_PROBADOS[1].o) };
+    tiempo: null, tiempoManual: {}, onboarded: false, confirmados: {}, oficinaForzada: {}, probador: clonar(OUTFITS_PROBADOS[1].o), datosV: DATOS_V };
 }
 function normalizarPrenda(p) { return Object.assign(P(p.id, p.nombre, p.hueco, p.tipo, p.familia, p.hex, p.formalidad, p.abrigo), p); }
 function migrar(s) {
@@ -1026,10 +1060,41 @@ function migrar(s) {
   r.prendas = (Array.isArray(s.prendas) && s.prendas.length ? s.prendas : n.prendas).map(normalizarPrenda);
   r.usos = Array.isArray(s.usos) ? s.usos : []; r.favoritos = Array.isArray(s.favoritos) ? s.favoritos : [];
   r.tiempoManual = s.tiempoManual || {}; r.oficinaForzada = s.oficinaForzada || {}; r.confirmados = s.confirmados || {};
+  r.datosV = s.datosV || 1;
+  return corregirDatos(r);
+}
+// Aplica CORRECCIONES pendientes a un estado guardado (prendas, historial, favoritos y probador)
+function corregirDatos(r) {
+  const base = mapa(INVENTARIO_BASE);
+  for (let v = r.datosV + 1; v <= DATOS_V; v++) {
+    const c = CORRECCIONES[v]; if (!c) continue;
+    const get = id => r.prendas.find(p => p.id === id);
+    // Si en la V1.0 el asistente separó el jersey en dos, se queda solo el marino
+    if (v === 2 && !get('jer-blancomarino') && get('jer-blanco') && get('jer-marino')) {
+      const b = get('jer-blanco');
+      r.prendas = r.prendas.filter(p => p !== b);
+      r.favoritos = r.favoritos.filter(f => !Object.values(f.o).includes(b.id));
+      if (r.probador && r.probador.capa === b.id) r.probador.capa = null;
+    }
+    for (const [de, a] of Object.entries(c.renombrar || {})) {
+      const p = get(de); if (!p || get(a)) continue;
+      p.id = a;
+      const cambia = o => { if (o) for (const k of Object.keys(o)) if (o[k] === de) o[k] = a; };
+      r.usos.forEach(u => { u.ids = u.ids.map(x => x === de ? a : x); cambia(u.o); });
+      r.favoritos.forEach(f => cambia(f.o)); cambia(r.probador);
+    }
+    for (const [id, campos] of Object.entries(c.campos || {})) {
+      const p = get(id), b = base[id]; if (!p || !b) continue;
+      campos.forEach(k => { p[k] = clonar(b[k]); });
+    }
+    if (v === 2 && !r.ajustes.cinturones) r.ajustes.cinturones = CINTURONES_TEXTO;
+    r.datosV = v;
+  }
   return r;
 }
 function cargar() { try { const raw = localStorage.getItem(KEY); if (raw) return migrar(JSON.parse(raw)); } catch (e) { console.warn(e); } return estadoNuevo(); }
 let S = cargar();
+if (!S.ajustes.cinturones) S.ajustes.cinturones = CINTURONES_TEXTO;
 let fallosGuardado = 0;
 function guardar() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { if (!fallosGuardado++) toast('No se ha podido guardar en el iPhone'); } }
 function M() { return mapa(S.prendas); }
@@ -1520,7 +1585,6 @@ function vistaAjustes() {
 const W = { paso: 1, dias: [], hora: '07:15', resp: {} };
 function abrirAsistente() {
   W.paso = 1; W.dias = S.ajustes.dias.slice(); W.hora = S.ajustes.hora || '07:15'; W.resp = {};
-  const verde = S.prendas.find(p => p.id === 'polo-verde'); W.resp.verdeHex = verde ? verde.hex : '#3f5d49';
   $('#wizard').hidden = false; document.body.classList.add('noscroll'); pintarAsistente();
 }
 function pintarAsistente() {
@@ -1536,51 +1600,21 @@ function pintarAsistente() {
       <input class="input" type="time" value="${esc(W.hora)}" data-chg="w-hora" aria-label="Hora de salida" style="font-size:1.4rem;min-height:56px">
       <div class="actions"><button class="btn" type="button" data-act="w-atras">Atrás</button><button class="btn primary" type="button" data-act="w-sig">Siguiente</button></div>`;
   } else {
-    const q = (k, titulo, opciones, ayuda) => `<div class="q"><b>${esc(titulo)}</b>${ayuda ? `<span class="small muted">${esc(ayuda)}</span>` : ''}<div class="seg">${opciones.map(([v, l]) => `<button type="button" data-act="w-resp" data-k="${k}" data-v="${v}" aria-pressed="${W.resp[k] === v}">${esc(l)}</button>`).join('')}</div></div>`;
-    h += `<h1>Prendas por confirmar</h1><p class="muted">Del apartado 9 del inventario. Contesta lo que sepas; lo que dejes sin marcar se queda como está.</p>
-      <div class="q"><b>Tono del polo verde</b><span class="small muted">Ahora: verde botella supuesto.</span><div class="colorpair"><input class="input" type="color" value="${esc(W.resp.verdeHex)}" data-chg="w-verde" aria-label="Tono del polo verde"><span class="small">Toca para ajustarlo</span></div></div>
-      ${q('jersey', 'Jersey blanco/marino', [['1', '1 bicolor'], ['2', '2 jerséis']], 'Si son 2, lo separo en uno blanco y uno marino.')}
-      ${q('polos', 'Polos negro, marino y verde', [['piqué', 'Piqué'], ['punto', 'Punto']])}
-      ${q('merino', 'Merino Uniqlo col.17', [['granate', 'Granate'], ['rojo', 'Rojo vivo']], 'Si es rojo vivo, las reglas del granate dejan de aplicarse.')}
-      ${q('derbys', 'Material de los derbys', [['ante', 'Ante'], ['sintético', 'Sintético']])}
-      <div class="q"><b>Cinturones que tienes</b><input class="input" placeholder="Ej.: marrón liso, negro" value="${esc(W.resp.cinturones || '')}" data-chg="w-cint"></div>
-      <div class="actions"><button class="btn" type="button" data-act="w-fin" data-saltar="1">Saltar</button><button class="btn primary" type="button" data-act="w-fin">Guardar y empezar</button></div>
-      <button class="linkbtn" type="button" data-act="w-atras">Atrás</button>`;
+    h += `<h1>Inventario confirmado</h1><p class="muted">Ya no queda nada «por confirmar» del apartado 9. Si algo cambia, edítalo en el Armario.</p>
+      <div class="q"><ul class="small" style="margin:0;padding-left:18px;display:grid;gap:4px">
+        <li>Polo verde: verde oliva, de punto.</li><li>Polos negro y marino: piqué.</li>
+        <li>Jersey marino Tommy Hilfiger (antes «blanco/marino»).</li><li>Merino Uniqlo col.17: rojo intenso, con las reglas del granate.</li>
+        <li>Derbys: sintéticos con aspecto ante.</li><li>Cinturones: marrón de ante y negro de piel.</li></ul></div>
+      <div class="actions"><button class="btn" type="button" data-act="w-atras">Atrás</button><button class="btn primary" type="button" data-act="w-fin">Empezar</button></div>`;
   }
   $('#wizard').innerHTML = h + '</div>';
 }
 function terminarAsistente(saltar) {
   S.ajustes.dias = W.dias.slice().sort(); S.ajustes.hora = W.hora;
-  if (!saltar) aplicarConfirmaciones(W.resp);
   S.onboarded = true; guardar();
   $('#wizard').hidden = true; document.body.classList.remove('noscroll');
   pedirPersistencia(); UI.cache = null; UI.vista = 'hoy'; render(); cargarTiempo();
 }
-function aplicarConfirmaciones(r) {
-  const get = id => S.prendas.find(p => p.id === id);
-  const verde = get('polo-verde');
-  if (verde && r.verdeHex && r.verdeHex !== verde.hex) { verde.hex = r.verdeHex; verde.notas = 'Tono confirmado'; S.confirmados.verde = r.verdeHex; }
-  if (r.jersey === '2') {
-    const j = get('jer-blancomarino');
-    if (j) {
-      const i = S.prendas.indexOf(j);
-      const blanco = Object.assign(clonar(j), { id: idUnico('jer-blanco'), nombre: 'Jersey blanco', familia: 'blanco', hex: j.hex, hex2: null, notas: '' });
-      const marino = Object.assign(clonar(j), { id: idUnico('jer-marino'), nombre: 'Jersey marino', familia: 'marino', hex: j.hex2 || '#2a3550', hex2: null, notas: '' });
-      S.prendas.splice(i, 1, blanco, marino);
-      S.favoritos = S.favoritos.filter(f => !Object.values(f.o).includes(j.id));
-    }
-  } else if (r.jersey === '1') { const j = get('jer-blancomarino'); if (j) j.notas = 'Confirmado: 1 jersey bicolor'; }
-  if (r.jersey) S.confirmados.jersey = r.jersey;
-  if (r.polos) { ['polo-negro', 'polo-marino', 'polo-verde'].forEach(id => { const p = get(id); if (p) p.material = r.polos === 'punto' ? 'Punto' : 'Piqué'; }); S.confirmados.polos = r.polos; }
-  if (r.merino) {
-    const m = get('u-merino-rojo');
-    if (m) { if (r.merino === 'rojo') { m.familia = 'rojo'; m.hex = '#b0222f'; m.nombre = 'Jersey merino rojo'; } else { m.familia = 'granate'; m.notas = (m.notas ? m.notas + ' · ' : '') + 'Tono confirmado: granate'; } }
-    S.confirmados.merino = r.merino;
-  }
-  if (r.derbys) { ['zap-derby-cognac', 'zap-derby-oscuro'].forEach(id => { const p = get(id); if (p) p.material = r.derbys === 'ante' ? 'Ante' : 'Sintético'; }); S.confirmados.derbys = r.derbys; }
-  if (r.cinturones != null && r.cinturones !== '') { S.ajustes.cinturones = r.cinturones; S.confirmados.cinturones = r.cinturones; }
-}
-
 /* ---------- Hoja, toast ---------- */
 function abrirHoja(html) {
   const s = $('#sheet'); $('#sheet-body').innerHTML = html; s.hidden = false; document.body.classList.add('noscroll');
@@ -1673,7 +1707,6 @@ const ACT = {
   'w-dia'(el) { const d = +el.dataset.d, i = W.dias.indexOf(d); if (i >= 0) W.dias.splice(i, 1); else if (W.dias.length < 3) W.dias.push(d); else { W.dias.shift(); W.dias.push(d); } pintarAsistente(); },
   'w-sig'() { W.paso++; pintarAsistente(); $('#wizard').scrollTop = 0; },
   'w-atras'() { W.paso--; pintarAsistente(); },
-  'w-resp'(el) { W.resp[el.dataset.k] = W.resp[el.dataset.k] === el.dataset.v ? undefined : el.dataset.v; pintarAsistente(); },
   'w-fin'(el) { terminarAsistente(!!el.dataset.saltar); }
 };
 const CHG = {
@@ -1700,9 +1733,7 @@ const CHG = {
   umbral(el) { const v = Number(el.value); if (Number.isFinite(v)) { S.ajustes.umbrales[el.dataset.k] = v; guardar(); recalcularHoy(); } },
   cinturones(el) { S.ajustes.cinturones = el.value.trim(); guardar(); },
   importar(el) { const f = el.files && el.files[0]; if (f) importar(f); el.value = ''; },
-  'w-hora'(el) { if (el.value) W.hora = el.value; },
-  'w-verde'(el) { W.resp.verdeHex = el.value; },
-  'w-cint'(el) { W.resp.cinturones = el.value.trim(); }
+  'w-hora'(el) { if (el.value) W.hora = el.value; }
 };
 async function guardarFicha(form) {
   const fd = new FormData(form);

@@ -122,6 +122,13 @@ main.view { max-width: 600px; margin: 0 auto; padding: 14px max(16px, var(--sar)
 .frase { font-size: .93rem; line-height: 1.45; }
 .frase b { font-weight: 600; }
 .worn { color: var(--ok); font-weight: 600; font-size: .9rem; }
+.subnotas { display: flex; gap: 12px; font-size: .78rem; color: var(--soft); }
+.subnotas b { color: var(--ink); font-weight: 600; }
+.nomeconvence { justify-self: center; color: var(--soft); margin-top: -6px; }
+.alt.meh { background: var(--paper2); opacity: .7; }
+.alt.matiz .alt-sub.motivo { color: var(--warn); }
+.alt.meh .alt-sub.motivo { color: var(--warn); }
+.chip.meh { opacity: .6; }
 .tag-fija { color: var(--accent); font-weight: 700; }
 .piece.fija .pn { font-weight: 600; }
 .fijas-info { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .85rem; color: var(--soft); margin-top: -4px; }
@@ -274,8 +281,17 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V2.2';
+const VERSION = 'V3.0';
 const CAMBIOS = {
+  'V3.0': [
+    'Motor rehecho con los dos informes del proyecto: el outfit se juzga entero (variedad de colores según la superficie, un solo foco saturado, oscuros casi iguales, regla de los tres tonos con cazadora).',
+    'El color se mide de verdad (luminosidad y saturación OKLCH), no por el nombre. Las reglas de color pasan a ser suaves y condicionadas: oliva con marino vale si hay un claro; vaquero con marino ya no se prohíbe.',
+    'Obligatorias solo las funcionales: nada de lona ni camiseta sola en días de oficina; en reunión, ni zapatillas ni vaqueros; nada de calcetín blanco con derbys; formalidad incompatible; tiempo y disponibilidad.',
+    'Dos notas: Estilo y Contexto (tiempo, tipo de día, rotación y tus gustos).',
+    'Nuevo botón «No me convence»: aprende de ti sin saltarse las reglas. Se puede olvidar en Ajustes.',
+    'Al cambiar una pieza: recomendables, no recomendables (en gris, con el motivo) y descartadas.',
+    'Calibrado con los 30 casos del informe y con tus fallos reales: 72 tests.'
+  ],
   'V2.2': [
     'Las reglas de moda son obligatorias: si un outfit rompe una, no se propone y su nota no pasa de 60.',
     'Nueva regla: lo que asoma bajo el jersey tiene que contrastar con él (base clara bajo jersey oscuro, o al revés).',
@@ -317,101 +333,150 @@ const CAMBIOS = {
   ]
 };
 
+
 const CONFIG = {
+  /* ==========================================================
+     V3 · Base: los dos informes del proyecto (deep-research-report.md y
+     «Motor de compatibilidad de outfits masculinos»).
+     Principios:
+     1. El outfit se juzga entero (complejidad de paleta, focos, capas), no como suma de parejas.
+     2. Reglas obligatorias pocas y funcionales o de contexto. El color es regla suave y condicionada.
+     3. El color se mide (OKLCH: luminosidad L, croma C, tono h), no se adivina por el nombre.
+     4. Dos notas separadas: Estilo (estética) y Contexto (tiempo, tipo de día, rotación, tus gustos).
+     Todos los umbrales son hipótesis de partida, calibradas con los casos de prueba de runTests().
+     ========================================================== */
   puntosBase: 75,
   veredicto: { pega: 80, matices: 65 },
   textosVeredicto: { pega: 'Pega', matices: 'Pega con matices', no: 'No pega' },
-  neutros: ['negro', 'blanco', 'gris', 'beige', 'marino', 'vaquero', 'marrón'],
-  // Colores de acento: como mucho uno por outfit (el resto, neutros)
-  acentos: ['azul cielo', 'granate', 'rojo', 'verde', 'rosa apagado'],
-  // Grupos de color: los tonos de un mismo grupo cuentan como un solo color en la paleta
-  grupos: { 'azul cielo': 'azul', 'marino': 'azul', 'vaquero': 'azul', 'marrón': 'tierra', 'beige': 'tierra', 'cognac': 'tierra', 'marrón oscuro': 'tierra', 'granate': 'rojo', 'rojo': 'rojo' },
-  // Luminancia relativa por debajo de la cual una prenda cuenta como «oscura»
-  oscuroL: 0.12,
+  // Si se incumple una regla obligatoria, la nota no pasa de aquí y el outfit no se propone
+  notaMaxRegla: 60,
+  // Rendimiento decreciente: a partir de +desde, lo que suma en Estilo cuenta factor
+  tope: { desde: 8, factor: 0.5, texto: 'Rendimiento decreciente: a partir de +8, lo que suma cuenta la mitad' },
+  // Nota final = Estilo − pesoContexto × (100 − Contexto)
+  pesoContexto: 0.6,
 
-  /* ---------- Apartado 3 · Color ----------
-     Las parejas se miran entre prendas que se tocan. Peso de cada contacto: */
-  contactos: { arribaPantalon: 1, baseCapa: 0.5, exteriorArriba: 0.6, exteriorPantalon: 0.6 },
-  colores: {
-    muyBuena: 6,
-    correcta: 2,
-    blanco: { texto: 'El blanco va con casi todo' },
-    pares: [
-      { a: 'marrón', b: 'azul cielo', nivel: 'muy', texto: 'Marrón y azul cielo: de las mejores parejas posibles' },
-      { a: 'marino', b: 'beige', nivel: 'muy', texto: 'Marino y beige: la pareja clásica que no falla' },
-      { a: 'marrón', b: 'marino', nivel: 'muy', texto: 'Marrón y marino: contraste cálido-frío muy de oficina' },
-      { a: 'marino', b: 'gris', nivel: 'muy', texto: 'Marino y gris: el uniforme de oficina' },
-      { a: 'granate', b: 'gris', nivel: 'muy', texto: 'Granate y gris: sobrio y con personalidad' },
-      { a: 'granate', b: 'beige', nivel: 'muy', texto: 'Granate y beige: cálido y elegante' },
-      { a: 'granate', b: 'marino', nivel: 'muy', texto: 'Granate y marino: un clásico' },
-      { a: 'azul cielo', b: 'marino', nivel: 'muy', texto: 'Azul cielo y marino: degradado de azules' },
-      { a: 'azul cielo', b: 'beige', nivel: 'muy', texto: 'Azul cielo y beige: luminoso' },
-      { a: 'azul cielo', b: 'gris', nivel: 'muy', texto: 'Azul cielo y gris: suave y profesional' },
-      { a: 'verde', b: 'beige', nivel: 'muy', texto: 'Verde y beige: natural y fácil' },
-      { a: 'marrón', b: 'beige', nivel: 'muy', texto: 'Marrón y beige: tonal y elegante' },
-      { a: 'marrón', b: 'gris', nivel: 'muy', texto: 'Marrón y gris: sobrio y actual' },
-      { a: 'marrón', b: 'vaquero', nivel: 'muy', texto: 'El marrón le sienta muy bien al vaquero' },
-      { a: 'verde', b: 'marrón', nivel: 'muy', texto: 'Verde y marrón: paleta tierra' },
-      { a: 'negro', b: 'gris', nivel: 'ok', texto: 'Negro y gris: neutro y moderno' },
-      { a: 'negro', b: 'beige', nivel: 'ok', texto: 'Negro y beige: contraste suave' },
-      { a: 'gris', b: 'beige', nivel: 'ok', texto: 'Gris y beige: neutros que se entienden' },
-      { a: 'verde', b: 'marino', nivel: 'evitar', ajuste: -5, texto: 'Verde y marino juntos: piden un neutro claro en medio' },
-      { a: 'verde', b: 'gris', nivel: 'ok', texto: 'Verde y gris: sobrio' },
-      { a: 'verde', b: 'vaquero', nivel: 'ok', texto: 'Verde y vaquero: casual' },
-      { a: 'granate', b: 'vaquero', nivel: 'ok', texto: 'Granate y vaquero: buen contraste' },
-      { a: 'granate', b: 'verde', nivel: 'evitar', ajuste: -30, texto: 'Granate y verde juntos: efecto Navidad' },
-      { a: 'negro', b: 'marino', nivel: 'evitar', ajuste: -14, texto: 'Negro y marino juntos parecen un descuido' },
-      { a: 'negro', b: 'marrón', nivel: 'evitar', ajuste: -14, soloOscuro: true, texto: 'Negro y marrón oscuro se apagan entre sí' },
-      { a: 'vaquero', b: 'marino', nivel: 'evitar', ajuste: -10, texto: 'Vaquero y marino se parecen sin llegar a ser iguales' },
-      { a: 'granate', b: 'marrón', nivel: 'evitar', ajuste: -10, texto: 'Granate y marrón sin un neutro en medio: cálido sobre cálido' }
-    ]
+  /* ---------- Color (Bloque II) ---------- */
+  color: {
+    acromatico: 0.03,   // croma OKLCH por debajo: neutro acromático (negro, gris, blanco)
+    saturado: 0.10,     // croma a partir del cual una prenda es foco de color
+    pesoNeutro: 0.3,    // en la complejidad, los neutros acromáticos pesan 0,3 (informe: contar el blanco como color es excesivo)
+    cromaRef: 0.15,     // peso por croma: superficie × (0,5 + C / cromaRef)
+    // Familias de color para la complejidad (los tonos de una familia cuentan como una)
+    grupos: { 'azul cielo': 'azul', 'marino': 'azul', 'vaquero': 'azul', 'marrón': 'tierra', 'beige': 'tierra', 'cognac': 'tierra', 'marrón oscuro': 'tierra', 'tostado': 'tierra', 'granate': 'rojo', 'rojo': 'rojo', 'verde': 'verde', 'rosa apagado': 'rosa' },
+    // Complejidad = entropía de familias ponderada por superficie visible (bits)
+    complejidad: { umbral: 1.45, factor: 60, bonusHasta: 1.1, bonus: 2, texto: 'Demasiados colores que no se repiten', textoBonus: 'Paleta contenida: pocos colores y bien repartidos' },
+    focos: { ajuste: -10, texto: 'Dos focos de color saturado compiten' },
+    // Casi-coincidencia: dos oscuros de la misma familia (o negro con un oscuro apagado) casi iguales y en contacto
+    casiIgual: { dE: 0.12, dL: 0.13, Lmax: 0.5, cromaApagado: 0.06, ajuste: -12, ajusteTextura: -6, texto: 'parecen un intento fallido de igualar' },
+    // Mismo color arriba y abajo
+    mismoColor: { dE: 0.04, ajuste: -12, ajusteTextura: -4, texto: 'Mismo color arriba y abajo sin contraste de textura: queda plano', textoTextura: 'Tonal: funciona por el contraste de textura, pero pide un claro' },
+    // Todo oscuro: prendas grandes oscuras y con poco rango de luminosidad
+    todoOscuro: { Lmax: 0.55, Lmedia: 0.45, ajuste: -8, factorTextura: 0.75, texto: 'Todo oscuro: falta una prenda clara que levante el conjunto' },
+    // Monocromo plano: todas las prendas grandes del mismo color y casi la misma luminosidad
+    plano: { rango: 0.10, ajuste: -8, texto: 'Todo del mismo color y tono: falta contraste' },
+    // Rojo saturado solo con tierras: cálido sobre cálido sin un frío o neutro que equilibre
+    calidoSobreCalido: { ajuste: -4, texto: 'Rojo con tierras: cálido sobre cálido, sin un frío que equilibre' },
+    // Ou y Luo (2006): diferencia moderada de luminosidad entre arriba y abajo, con una prenda clara
+    luz: { min: 0.15, max: 0.55, claro: 0.6, ajuste: 3, texto: 'Contraste de luminosidad moderado entre arriba y abajo' },
+    // Neutros cálido y frío grandes y en contacto (gris frío junto a beige cálido)
+    // Colores distintos en la ropa (sin contar el blanco, el calzado ni el calcetín)
+    notas: { cuatro: -6, cinco: -12, areaMin: 0.03, texto: 'colores distintos en la ropa: uno de más' },
+    calidoFrio: { ajuste: -4, texto: 'Gris frío junto a beige cálido en prendas grandes: se ensucian un poco' }
+  },
+  // Contactos entre prendas (peso de la pareja)
+  contactos: { arribaPantalon: 1, exteriorArriba: 0.6, exteriorPantalon: 0.6 },
+  // Matriz de parejas (informe «Motor de compatibilidad», tabla color-color). muy = +5, ok = +2, neutro = 0.
+  // cond: la pareja depende del resto del outfit.
+  pares: [
+    { a: 'marino', b: 'beige', v: 'muy', texto: 'Marino y beige: la pareja más robusta' },
+    { a: 'marino', b: 'gris', v: 'cond', cond: 'dL', min: 0.15, si: 5, no: 1, texto: 'Marino y gris con contraste: el uniforme de oficina', textoNo: 'Marino y gris de luminosidad parecida: correcto, algo plano' },
+    { a: 'marino', b: 'marrón', v: 'muy', texto: 'Marino y marrón: contraste frío-cálido de oficina' },
+    { a: 'marino', b: 'azul cielo', v: 'muy', texto: 'Celeste y marino: tonal en azules' },
+    { a: 'marino', b: 'granate', v: 'muy', texto: 'Granate y marino: un clásico' },
+    { a: 'marino', b: 'verde', v: 'cond', cond: 'claro', si: 2, no: -5, texto: 'Oliva y marino con un claro que los separa', textoNo: 'Oliva y marino juntos sin un claro que los separe' },
+    { a: 'marino', b: 'negro', v: 'neutro' },
+    { a: 'marino', b: 'vaquero', v: 'neutro' },
+    { a: 'negro', b: 'gris', v: 'muy', texto: 'Negro y gris: paleta fría coherente' },
+    { a: 'negro', b: 'beige', v: 'ok', texto: 'Negro y beige: contraste suave' },
+    { a: 'negro', b: 'marrón', v: 'cond', cond: 'marronClaro', min: 0.45, no: -6, textoNo: 'Marrón claro con negro: contraste cálido-frío fuerte' },
+    { a: 'granate', b: 'gris', v: 'muy', texto: 'Granate y gris: sobrio y con personalidad' },
+    { a: 'granate', b: 'beige', v: 'muy', texto: 'Granate y beige: cálido y elegante' },
+    { a: 'granate', b: 'marrón', v: 'cond', cond: 'dL', min: 0.15, si: 2, no: -4, texto: 'Granate y marrón con diferencia de luminosidad: análogos cálidos', textoNo: 'Granate y marrón de luminosidad parecida: cálido sobre cálido' },
+    { a: 'granate', b: 'verde', v: 'cond', cond: 'navidad', fuerte: -14, suave: -4, texto: 'Rojo y verde juntos: efecto navideño' },
+    { a: 'granate', b: 'vaquero', v: 'ok', texto: 'Granate y vaquero: buen contraste' },
+    { a: 'granate', b: 'azul cielo', v: 'ok', texto: 'Granate y celeste' },
+    { a: 'verde', b: 'beige', v: 'muy', texto: 'Oliva y beige: natural y fácil' },
+    { a: 'verde', b: 'marrón', v: 'muy', texto: 'Oliva y marrón: paleta tierra' },
+    { a: 'verde', b: 'gris', v: 'cond', cond: 'grisClaro', min: 0.55, si: 2, no: 0, texto: 'Oliva y gris medio-claro: sobrio' },
+    { a: 'verde', b: 'vaquero', v: 'ok', texto: 'Oliva y vaquero: casual' },
+    { a: 'azul cielo', b: 'beige', v: 'muy', texto: 'Celeste y beige: luminoso' },
+    { a: 'azul cielo', b: 'gris', v: 'muy', texto: 'Celeste y gris: suave y profesional' },
+    { a: 'azul cielo', b: 'marrón', v: 'muy', texto: 'Celeste y marrón: de las mejores parejas' },
+    { a: 'marrón', b: 'beige', v: 'muy', texto: 'Marrón y beige: tonal tierra' },
+    { a: 'marrón', b: 'gris', v: 'muy', texto: 'Marrón y gris: sobrio y actual' },
+    { a: 'marrón', b: 'vaquero', v: 'muy', texto: 'El marrón le sienta muy bien al vaquero' },
+    { a: 'gris', b: 'beige', v: 'ok', texto: 'Gris y beige: neutros' },
+    { a: 'vaquero', b: 'beige', v: 'ok', texto: 'Vaquero y beige: casual cálido' },
+    { a: 'vaquero', b: 'gris', v: 'ok', texto: 'Vaquero y gris' }
+  ],
+  muyBuena: 5, correcta: 2,
+  blanco: { ajuste: 2, texto: 'El blanco va con casi todo' },
+  tonal: { dL: 0.15, ajuste: 2, texto: 'Tonal con contraste de luminosidad' },
+
+  /* ---------- Capas (Bloque VI) ---------- */
+  capas: {
+    // Permanent Style 2021: con cazadora, tres tonos claramente distintos (cazadora, lo de debajo, pantalón)
+    // o cazadora y jersey igual de oscuros
+    tresTonos: { dL: 0.10, oscuro: 0.42, ajuste: -8, texto: 'Con cazadora hacen falta tres tonos claramente distintos (o cazadora y jersey igual de oscuros)' },
+    // Permanent Style 2019: bajo el punto, cuello claro (blanco, crudo, gris claro, celeste)
+    cuello: {
+      claro: 0.70, bonus: 3, textoBonus: 'Cuello claro bajo el jersey: limpio',
+      oscuro: -8, textoOscuro: 'Bajo el jersey, mejor un cuello claro (blanco, crudo, gris claro o celeste)',
+      sinRepetir: -6, textoSinRepetir: 'El color que asoma en el cuello no se repite en ningún otro sitio',
+      funde: 0.12, ajusteFunde: -4, textoFunde: 'Lo que asoma se funde con el jersey',
+      tonal: 0.15   // mismo color con diferencia clara de tono (tonal): válido
+    },
+    // El cuello del polo bajo el jersey debe tener estructura de camisa
+    estructura: {
+      camisa: [3, 'Camisa bajo jersey: el business casual clásico'],
+      polo: [1, 'Cuello de piqué sobre el jersey: se sostiene'],
+      poloPunto: [-3, 'El cuello blando del polo de punto se pierde bajo el jersey'],
+      camiseta: [0, '']
+    }
   },
 
-  /* ---------- Reglas generales (apartados 3 y 6) ---------- */
-  reglas: {
-    mismoColor: { ajuste: -15, texto: 'Arriba y pantalón del mismo color: el conjunto queda plano' },
-    acentos: { max: 1, ajuste: -8, texto: 'Dos colores de acento compiten' },
-    paleta: { corta: 2, bonus: 2, textoCorta: 'Paleta corta y coherente', max: 3, ajuste4: -18, ajuste5: -30, texto: 'Demasiados colores en la ropa' },
-    capaContraste: { ratio: 2, ratioTonal: 1.5, ajuste: -10, texto: 'Lo que asoma bajo el jersey no contrasta con él: mejor una base clara (blanco, celeste) bajo un jersey oscuro' },
-    tresCapas: { ajuste: -8, texto: 'Base, jersey y cazadora de tres colores distintos: las capas no se hablan' },
-    puntoFocal: { ajuste: -8, texto: 'Dos puntos focales: color protagonista y calzado llamativo' },
-    todoOscuro: { ajuste: -10, texto: 'Todo oscuro: falta una prenda clara que levante el conjunto' },
-    formalidad: { maxDif: 2, ajuste: -15, texto: 'Más de 2 puntos de diferencia de formalidad' },
-    exteriorMismo: { ajuste: -8, texto: 'La cazadora no contrasta con' },
-    exteriorContraste: { ajuste: 2, texto: 'La cazadora contrasta con el pantalón y con lo de arriba' },
-    camisaJersey: { ajuste: 3, texto: 'Camisa bajo jersey: el business casual clásico' },
-    poloJersey: { ajuste: 2, texto: 'Cuello del polo sobre el jersey: queda pulido' },
-    camisetaJersey: { ajuste: 1, texto: 'Camiseta bajo jersey: versión más relajada' },
-    texturas: { ajuste: 2, texto: 'Punto, algodón y ante: mezcla de texturas que suma' },
-    mismoTejido: { ajuste: -4, texto: 'Mismo tejido arriba y abajo: resta' }
+  /* ---------- Formalidad (Bloque I) ---------- */
+  formalidad: {
+    // Lo oscuro y liso es más formal; lo claro, menos (Permanent Style). No se aplica a camisas.
+    oscuro: 0.40, ajusteOscuro: 0.25, claro: 0.80, ajusteClaro: -0.25,
+    rango: { suave: 3, ajuste: -12, duro: 4, texto: 'Mucha distancia de formalidad entre prendas', textoDuro: 'Formalidad incompatible' }
   },
 
-  /* ---------- Apartado 4 · Calzado ----------
-     Por id de zapato; gana la primera regla que encaje. «_derby» y «_zapatilla» valen para calzado nuevo. */
+  /* ---------- Calzado (Bloque IV y reglas del armario) ---------- */
+  // Por id; gana la primera regla que encaje. «_derby» y «_zapatilla» valen para calzado nuevo.
   calzado: {
     'zap-derby-cognac': [
-      { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -25, nunca: true, texto: 'Derby cognac con chino negro: nunca' },
-      { pantalon: { tipo: 'chino', familia: ['marino', 'gris', 'beige'] }, ajuste: 4, texto: 'Derby cognac con chino {pf}: reunión y business casual' },
-      { pantalon: { tipo: 'vaquero' }, ajuste: 2, texto: 'Derby cognac con vaquero: mejor si es oscuro' }
+      { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -20, texto: 'Derby cognac con chino negro: contraste cálido-frío excesivo' },
+      { pantalon: { tipo: 'chino', familia: ['marino', 'gris', 'beige'] }, ajuste: 4, texto: 'Derby cognac con chino {pf}' },
+      { pantalon: { tipo: 'vaquero' }, ajuste: 2, texto: 'Derby cognac con vaquero' }
     ],
     'zap-derby-oscuro': [
-      { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -25, nunca: true, texto: 'Derby marrón oscuro con chino negro: nunca' },
-      { pantalon: { tipo: 'chino', familia: ['beige', 'gris', 'marino'] }, ajuste: 4, texto: 'Derby marrón oscuro con chino {pf}: smart casual de otoño' },
-      { pantalon: { tipo: 'vaquero' }, ajuste: 3, texto: 'Derby marrón oscuro con vaquero: muy bien' }
+      { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -4, texto: 'Derby marrón oscuro con chino negro: aceptable, sin más' },
+      { pantalon: { tipo: 'chino', familia: ['beige', 'gris', 'marino'] }, ajuste: 4, texto: 'Derby marrón oscuro con chino {pf}' },
+      { pantalon: { tipo: 'vaquero' }, ajuste: 3, texto: 'Derby marrón oscuro con vaquero' }
     ],
     'mr530': [
       { pantalon: { tipo: 'chino', familia: ['beige', 'marino'] }, ajuste: 3, texto: 'MR530 con chino {pf}: su mejor pareja' },
       { pantalon: { tipo: 'vaquero' }, ajuste: 3, texto: 'MR530 con vaquero: su mejor pareja' }
     ],
     'u740': [
-      { pantalon: { tipo: 'chino', familia: ['gris', 'marino', 'negro'] }, ajuste: 3, texto: 'U740 con chino {pf}: muy bien' },
+      { pantalon: { tipo: 'chino', familia: ['gris', 'marino', 'negro'] }, ajuste: 3, texto: 'U740 con chino {pf}' },
       { ajuste: 1, texto: 'U740: la zapatilla comodín' }
     ],
     'vans': [
-      { base: { tipo: 'camisa' }, ajuste: -25, nunca: true, texto: 'Vans con camisa: nunca' },
       { pantalon: { tipo: 'vaquero' }, ajuste: 1, texto: 'Vans con vaquero: día casual' },
       { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: 1, texto: 'Vans con chino negro: día casual' },
-      { ajuste: -8, texto: 'Vans: solo días casual (vaqueros o chino negro)' }
+      { ajuste: -8, texto: 'Vans: solo con vaqueros o chino negro' }
     ],
     _derby: [
       { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -6, texto: 'Zapato marrón con chino negro: mejor evitarlo' },
@@ -419,59 +484,63 @@ const CONFIG = {
     ],
     _zapatilla: []
   },
-  // Temporada del calzado (meses 1–12). Fuera de ella resta.
+  // COGNAC_FRIO: el cognac mejora con celeste arriba
+  cognacCeleste: { ajuste: 2, texto: 'El cognac con celeste arriba: muy buena pareja' },
   temporadaCalzado: { 'zap-derby-oscuro': { meses: [10, 11, 12, 1, 2, 3], ajuste: -3, texto: 'Derby marrón oscuro: mejor en otoño-invierno' } },
 
-  /* ---------- Apartado 5 · Calcetines ---------- */
+  /* ---------- Calcetines (consenso Permanent Style, Gentleman's Gazette, Put This On) ---------- */
   calcetines: {
-    oscuros: ['negro', 'gris', 'marino', 'marrón'],
-    recomendado: { negro: ['negro'], gris: ['gris'], marino: ['negro', 'marino'], beige: ['gris', 'marrón', 'beige'] },
+    recomendado: { negro: ['negro'], gris: ['gris', 'negro'], marino: ['negro', 'marino'], beige: ['gris', 'marrón'] },
     coincide: { ajuste: 3, texto: 'Calcetín {sf} con chino {pf}: alarga la pierna' },
     masOscuro: { ajuste: 1, texto: 'Calcetín más oscuro que el pantalón: correcto' },
-    masClaro: { ajuste: -6, texto: 'Calcetín más claro que el pantalón: corta la pierna' },
-    blancoChino: { ajuste: -18, texto: 'Calcetín blanco con chinos: nunca' },
-    blancoDerby: { ajuste: -12, texto: 'Con derbys, el calcetín siempre oscuro' },
-    derbyOscuro: { ajuste: 2, texto: 'Calcetín oscuro con derbys' },
+    masClaro: { dL: 0.08, ajuste: -8, texto: 'Calcetín más claro que el pantalón: corta la pierna' },
+    blancoDerby: { texto: 'Calcetín blanco con derbys: nunca' },
+    blancoChinoZapatilla: { ajuste: -8, texto: 'Calcetín blanco con chino: mejor invisible o del color del pantalón' },
     blancoOk: { ajuste: 3, texto: 'Calcetín blanco con vaquero y zapatilla' },
-    blancoOtro: { ajuste: -6, texto: 'Calcetín blanco: solo con vaquero y zapatilla' }
+    derbyOscuro: { ajuste: 2, texto: 'Calcetín oscuro con derbys' },
+    claroDerby: { ajuste: -6, texto: 'Con derbys, el calcetín mejor oscuro' }
   },
 
-  /* ---------- Apartado 7 · Lluvia y trayecto ---------- */
+  /* ---------- Texturas (Bloque III) ---------- */
+  texturas: {
+    mezcla: { ajuste: 2, texto: 'Punto, algodón y ante: mezcla de texturas que suma' },
+    mismoTejido: { ajuste: -3, texto: 'Mismo tejido arriba y abajo: resta' }
+  },
+  focoCalzado: { ajuste: -8, texto: 'Dos focos: color saturado y calzado llamativo' },
+
+  /* ---------- Contexto (Bloque VII) ---------- */
+  // Cada tipo de día fija un objetivo y un mínimo de formalidad. Mínimo y prohibiciones: obligatorios.
+  tipoDia: {
+    reunion: { nombre: 'Reunión', objetivo: 4.2, minimo: 3, camisetaSola: false },
+    normal: { nombre: 'Normal', objetivo: 3.7, minimo: 2, camisetaSola: false },
+    casual: { nombre: 'Casual', objetivo: 3.0, minimo: 1, camisetaSola: true }
+  },
+  ajusteFormalidad: { tolerancia: 0.4, porPunto: -10, bajo: 1.5, ajusteBajo: -8 },
   lluvia: {
-    penaliza: { 'vans': [-8, 'Lluvia: la lona de las Vans se empapa'], 'zap-derby-cognac': [-8, 'Lluvia: el derby cognac sufre con el agua'] },
+    penaliza: { 'vans': [-8, 'Lluvia: la lona de las Vans se empapa'], 'zap-derby-cognac': [-6, 'Lluvia: el aspecto ante se mancha con el agua'], 'zap-derby-oscuro': [-6, 'Lluvia: el aspecto ante se mancha con el agua'] },
     favorece: { 'u-harrington': [3, 'Lluvia: el harrington aguanta la llovizna'] }
   },
   trayecto: {
     exteriorFacil: { ajuste: 4, texto: 'Mucha diferencia Manresa–Barcelona: capa exterior fácil de quitar' },
     soloJersey: { ajuste: -3, texto: 'Mucha diferencia de temperatura: mejor cazadora que jersey' },
     baseSola: { ajuste: 3, texto: 'Al quitarte capas, la base funciona sola' },
-    baseNoSola: { ajuste: -3, texto: 'Al quitarte el jersey te quedas en camiseta' }
+    baseNoSola: { ajuste: -6, texto: 'Al quitarte el jersey en la oficina te quedas en camiseta' }
   },
   calor: {
     poloPunto: { ajuste: 2, texto: 'Calor: polo de punto, fresco y arreglado' },
     lino: { ajuste: 3, texto: 'Calor: con lino, la base más fresca' }
   },
   abrigoInvierno: { ajuste: 6, texto: 'Frío: abrigo de invierno' },
-  temporada: { ajuste: -6, texto: 'fuera de temporada' },
-
-  /* ---------- Rotación ---------- */
+  temporada: { ajuste: -10, texto: 'fuera de temporada' },
   rotacion: {
     diasOficina: 3, semanas: 3,
     prendaReciente: { arriba: -4, resto: -2, texto: 'usada en los últimos 3 días de oficina' },
     outfitRepetido: { ajuste: -10, texto: 'Outfit idéntico en las últimas 3 semanas' },
     sinUsar: { ajuste: 1, max: 3, texto: 'Recupera prendas sin usar en 3 semanas' }
   },
+  // «No me convence»: aprende de ti sin saltarse las reglas
+  gustos: { outfit: -15, par: -4, maxPar: -12, textoOutfit: 'Lo marcaste como «No me convence»', textoPar: 'Combinación de arriba y pantalón que no te convenció' },
 
-  /* ---------- Tipo de día ---------- */
-  tipoDia: {
-    reunion: { nombre: 'Reunión', ocasiones: ['Business casual'], bonusBase: { fMin: 4, ajuste: 3, texto: 'Reunión: camisa o polo de punto suman' } },
-    normal: { nombre: 'Normal', ocasiones: ['Business casual', 'Smart casual'] },
-    casual: { nombre: 'Casual', ocasiones: ['Business casual', 'Smart casual', 'Casual'], bonus: { 'Casual': 2, 'Smart casual': 2 }, textoBonus: 'Encaja con un día casual' }
-  },
-  // Si se incumple una regla de moda imprescindible, la nota no pasa de aquí y el outfit no se propone
-  notaMaxRegla: 60,
-  // Rendimiento decreciente de lo que suma (evita que todo acabe en 100)
-  tope: { desde: 10, factor: 0.5, texto: 'Rendimiento decreciente: a partir de +10, lo que suma cuenta la mitad' },
   // Variedad en HOY: penalización por cada pieza (pantalón, exterior, calzado) repetida entre propuestas
   variedadPenal: 2,
   // Videollamada: formalidad mínima de la parte de arriba
@@ -615,27 +684,65 @@ function fusionar(dst, src) {
   return dst;
 }
 function usarPesos(over) { CFG = fusionar(clonar(CONFIG), over || {}); PARES = construirPares(CFG); }
-function construirPares(c) { return new Map(c.colores.pares.map(p => [parKey(p.a, p.b), p])); }
+function construirPares(c) { return new Map(c.pares.map(p => [parKey(p.a, p.b), p])); }
 function parKey(a, b) { return [a, b].sort().join('|'); }
 function fam(p) { return String(p.familia || '').split('+')[0].trim().toLowerCase(); }
-function lum(hex) {
-  const h = String(hex || '#888888').replace('#', '');
-  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h.slice(0, 6), 16);
-  const f = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
-  return 0.2126 * f(n >> 16 & 255) + 0.7152 * f(n >> 8 & 255) + 0.0722 * f(n & 255);
+// Familia para la matriz de parejas: los marrones (cognac, marrón oscuro, tostado) cuentan como marrón; rojo como granate
+function famPar(p) {
+  const f = fam(p);
+  if (f === 'cognac' || f === 'marrón oscuro' || f === 'tostado') return 'marrón';
+  if (f === 'rojo') return 'granate';
+  return f;
 }
-function oscura(p) { return lum(p.hex) < CFG.oscuroL; }
+/* Color perceptual OKLCH (Björn Ottosson, 2020; CSS Color 4) */
+const _oklab = {};
+function oklab(hex) {
+  const k = String(hex || '#888888').toLowerCase();
+  if (_oklab[k]) return _oklab[k];
+  let h = k.replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h.slice(0, 6), 16);
+  const lin = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  const r = lin(n >> 16 & 255), g = lin(n >> 8 & 255), b = lin(n & 255);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  const L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+  const A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+  return (_oklab[k] = { L, a: A, b: B, C: Math.sqrt(A * A + B * B), h: (Math.atan2(B, A) * 180 / Math.PI + 360) % 360 });
+}
+function Lp(p) { return oklab(p.hex).L; }
+function Cp(p) { return oklab(p.hex).C; }
+function dE(p, q) { const x = oklab(p.hex), y = oklab(q.hex); return Math.hypot(x.L - y.L, x.a - y.a, x.b - y.b); }
+function acromatica(p) { return Cp(p) < CFG.color.acromatico; }
+// Familia de color para la complejidad: neutros acromáticos por luminosidad; el resto por grupo
+function famColor(p) {
+  if (acromatica(p)) { const L = Lp(p); return L < 0.33 ? 'negro' : L > 0.88 ? 'blanco' : 'gris'; }
+  const f = fam(p);
+  return CFG.color.grupos[f] || f;
+}
+const ACROMATICOS = new Set(['negro', 'gris', 'blanco']);
+// Compatibilidad: «oscura» por luminosidad perceptual
+function oscura(p) { return Lp(p) < CFG.color.todoOscuro.Lmedia; }
+function lum(hex) { return oklab(hex).L; }
 function mapa(prendas) { const m = {}; for (const p of prendas) m[p.id] = p; return m; }
 function claveOutfit(o) { return HUECOS.map(h => o[h.k] || '-').join('|'); }
 function claveSinCalcetin(o) { return HUECOS.filter(h => h.k !== 'calcetin').map(h => o[h.k] || '-').join('|'); }
 function arribaDe(o) { return o.capa || o.base; }
 function enMes(p, mes) { return !p.temporadas || !p.temporadas.length || p.temporadas.includes(mes); }
+// Clase de textura: punto (jersey, polo de punto), piqué, popelín, algodón, sarga, denim, ante, zapatilla…
 function textura(p) {
   const mat = (p.material || '').toLowerCase();
   if (p.tipo === 'jersey' || p.tipo === 'polo-punto' || mat.includes('punto')) return 'punto';
   if (mat.includes('piqué') || mat.includes('pique')) return 'piqué';
-  return { camisa: 'popelín', camiseta: 'algodón', polo: 'algodón', chino: 'sarga', vaquero: 'denim', cazadora: 'algodón', abrigo: 'lana', zapatilla: 'zapatilla' }[p.tipo]
-    || (p.tipo === 'derby' ? (/\bante\b/.test(mat) || !mat.includes('sint') ? 'ante' : 'liso') : p.tipo);
+  if (p.tipo === 'derby') return /ante/.test(mat) || !mat.includes('sint') ? 'ante' : 'liso';
+  return { camisa: 'popelín', camiseta: 'algodón', polo: 'piqué', chino: 'sarga', vaquero: 'denim', cazadora: 'algodón', abrigo: 'lana', zapatilla: 'zapatilla' }[p.tipo] || p.tipo;
+}
+// Contraste de textura fuerte: el punto frente a un tejido plano (sarga, denim)
+function contrasteTextura(p, q) {
+  const a = textura(p), b = textura(q);
+  return a !== b && (a === 'punto' || b === 'punto');
 }
 function cumple(cond, p) {
   if (!cond) return true;
@@ -645,199 +752,301 @@ function cumple(cond, p) {
   return true;
 }
 function rellenar(t, d) { return t.replace(/\{(\w+)\}/g, (_, k) => d[k] != null ? d[k] : ''); }
+// Formalidad efectiva: lo oscuro y liso sube, lo claro baja (no en camisas)
+function formalidadEf(p) {
+  if (p.formalidad == null) return null;
+  const F = CFG.formalidad, L = Lp(p);
+  if (p.tipo === 'camisa') return p.formalidad;
+  if (L < F.oscuro) return p.formalidad + F.ajusteOscuro;
+  if (L > F.claro) return p.formalidad + F.ajusteClaro;
+  return p.formalidad;
+}
 
-/* ---------- Ocasión ---------- */
+/* Superficies visibles relativas (informe «Motor de compatibilidad», métrica de complejidad) */
+function zonasVisibles(o, M) {
+  const base = M[o.base], capa = o.capa ? M[o.capa] : null, ext = o.exterior ? M[o.exterior] : null;
+  const z = [];
+  if (ext) z.push({ p: ext, rol: 'exterior', a: 0.40 });
+  if (capa) z.push({ p: capa, rol: 'capa', a: ext ? 0.15 : 0.35 });
+  if (base) z.push({ p: base, rol: 'base', a: capa ? 0.04 : ext ? 0.15 : 0.35 });
+  if (o.pantalon && M[o.pantalon]) z.push({ p: M[o.pantalon], rol: 'pantalon', a: 0.35 });
+  if (o.calzado && M[o.calzado]) z.push({ p: M[o.calzado], rol: 'calzado', a: 0.08 });
+  if (o.calcetin && M[o.calcetin]) z.push({ p: M[o.calcetin], rol: 'calcetin', a: 0.02 });
+  const t = z.reduce((s, x) => s + x.a, 0) || 1;
+  z.forEach(x => { x.a /= t; });
+  return z;
+}
+function complejidad(z) {
+  const w = {};
+  for (const x of z) { const f = famColor(x.p); w[f] = (w[f] || 0) + x.a * (0.5 + Cp(x.p) / CFG.color.cromaRef) * (ACROMATICOS.has(f) ? CFG.color.pesoNeutro : 1); }
+  const tot = Object.values(w).reduce((s, v) => s + v, 0) || 1;
+  let H = 0;
+  for (const v of Object.values(w)) { const q = v / tot; if (q > 0) H -= q * Math.log2(q); }
+  return { H, familias: Object.keys(w) };
+}
+
+/* ---------- Ocasión (solo para mostrar) ---------- */
 function ocasionDe(o, M) {
-  const base = M[o.base], capa = o.capa && M[o.capa], ext = o.exterior && M[o.exterior], pant = M[o.pantalon], calz = M[o.calzado];
-  const piezas = [base, capa, ext, pant, calz].filter(Boolean);
-  if (piezas.some(p => p.formalidad != null && p.formalidad <= 1)) return 'Casual';
-  if (pant.formalidad <= 2 && calz.formalidad < 4) return 'Casual';
-  const zapatilla = calz.formalidad <= 2;
-  const elementoOficina = base.formalidad >= 5 || (capa && capa.formalidad >= 4) || calz.formalidad >= 4;
-  if (!zapatilla && elementoOficina && pant.formalidad >= 4) return 'Business casual';
-  return 'Smart casual';
+  const z = zonasVisibles(o, M).filter(x => x.rol !== 'calcetin' && x.p.formalidad != null);
+  if (!z.length) return '—';
+  const t = z.reduce((s, x) => s + x.a, 0);
+  const media = z.reduce((s, x) => s + x.a * formalidadEf(x.p), 0) / t;
+  if (z.some(x => x.p.formalidad <= 1)) return 'Casual';
+  return media >= 3.75 ? 'Business casual' : media >= 2.9 ? 'Smart casual' : 'Casual';
 }
 
 /* ---------- Evaluación ----------
    o: {base, capa, exterior, pantalon, calzado, calcetin} (ids)
    M: mapa id → prenda
-   ctx (opcional): {tiempo:{ts,tmax,lluvia}, umbrales, mes, hoy, usos, tipoDia} */
+   ctx (opcional): {tiempo:{ts,tmax,lluvia}, umbrales, mes, hoy, usos, tipoDia, gustos}
+   Devuelve: nota (final), estilo, contexto, veredicto, ocasion, notas[{ajuste,texto,regla,ambito,duro}], reglas[] */
 function evaluar(o, M, ctx) {
   const C = CFG;
   const base = M[o.base], capa = o.capa ? M[o.capa] : null, ext = o.exterior ? M[o.exterior] : null;
   const pant = M[o.pantalon], calz = M[o.calzado], calc = o.calcetin ? M[o.calcetin] : null;
-  if (!base || !pant || !calz) return { nota: 0, veredicto: C.textosVeredicto.no, ocasion: '—', notas: [{ ajuste: 0, texto: 'Falta base, pantalón o calzado', regla: 'incompleto' }], incompleto: true };
+  if (!base || !pant || !calz) return { nota: 0, estilo: 0, contexto: 0, veredicto: C.textosVeredicto.no, ocasion: '—', notas: [{ ajuste: 0, texto: 'Falta base, pantalón o calzado', regla: 'incompleto' }], reglas: ['Falta base, pantalón o calzado'], incompleto: true };
   const notas = [];
-  // duro = regla de moda imprescindible: si se incumple, el outfit no pega (nota máxima CFG.notaMaxRegla) y no se propone
-  const add = (ajuste, texto, regla, duro) => { if (ajuste !== 0 || regla === 'info') notas.push({ ajuste: Math.round(ajuste * 10) / 10, texto, regla, duro: !!duro }); };
+  // duro = regla obligatoria: si se incumple, el outfit no pega (nota ≤ notaMaxRegla) y no se propone
+  const add = (ajuste, texto, regla, duro) => { if (ajuste !== 0 || duro) notas.push({ ajuste: Math.round(ajuste * 10) / 10, texto, regla, duro: !!duro, ambito: 'estilo' }); };
   const arriba = capa || base;
+  const z = zonasVisibles(o, M);
+  const grandes = z.filter(x => x.a >= 0.10 && x.rol !== 'calzado' && x.rol !== 'calcetin');
+  const hayClaro = z.some(x => x.rol !== 'calzado' && x.rol !== 'calcetin' && Lp(x.p) >= 0.70);
 
-  /* Color: parejas entre prendas que se tocan */
-  const porPar = new Map();
-  const contactos = [[arriba, pant, C.contactos.arribaPantalon, true]];
-  if (capa) contactos.push([base, capa, C.contactos.baseCapa, true]);
-  if (ext) { contactos.push([ext, arriba, C.contactos.exteriorArriba, true]); contactos.push([ext, pant, C.contactos.exteriorPantalon, false]); }
-  for (const [x, y, w, evitarAqui] of contactos) {
-    const fx = fam(x), fy = fam(y);
-    if (fx === fy) continue;
-    const k = parKey(fx, fy), r = PARES.get(k);
-    let aj = null, txt = null;
-    if (r) {
-      if (r.nivel === 'evitar') {
-        if (!evitarAqui) continue;
-        if (r.soloOscuro && !((fx === 'marrón' && oscura(x)) || (fy === 'marrón' && oscura(y)))) continue;
-        aj = r.ajuste; txt = r.texto;
-      } else { aj = (r.nivel === 'muy' ? C.colores.muyBuena : C.colores.correcta) * w; txt = r.texto; }
-    } else if (fx === 'blanco' || fy === 'blanco') { aj = C.colores.correcta * w; txt = C.colores.blanco.texto; }
-    if (aj == null) continue;
-    const prev = porPar.get(k);
-    if (!prev || (aj < 0 && prev.aj >= 0) || (Math.sign(aj) === Math.sign(prev.aj) && Math.abs(aj) > Math.abs(prev.aj))) porPar.set(k, { aj, txt });
+  /* 1. Parejas en contacto (matriz con condiciones) */
+  const contactos = [[arriba, pant, C.contactos.arribaPantalon]];
+  if (ext) { contactos.push([ext, arriba, C.contactos.exteriorArriba]); contactos.push([ext, pant, C.contactos.exteriorPantalon]); }
+  const vistos = new Set();
+  for (const [x, y, w] of contactos) {
+    const fx = famPar(x), fy = famPar(y), k = parKey(fx, fy);
+    if (vistos.has(k)) continue;
+    vistos.add(k);
+    if (fx === fy) {
+      if (Math.abs(Lp(x) - Lp(y)) >= C.tonal.dL) add(C.tonal.ajuste * w, C.tonal.texto, 'par');
+      continue;
+    }
+    const r = PARES.get(k);
+    if (!r) { if (fx === 'blanco' || fy === 'blanco') add(C.blanco.ajuste * w, C.blanco.texto, 'par'); continue; }
+    if (r.v === 'muy') add(C.muyBuena * w, r.texto, 'par');
+    else if (r.v === 'ok') add(C.correcta * w, r.texto, 'par');
+    else if (r.v === 'cond') {
+      if (r.cond === 'dL') { const okL = Math.abs(Lp(x) - Lp(y)) >= r.min; add((okL ? r.si : r.no) * w, okL ? r.texto : r.textoNo, 'par'); }
+      else if (r.cond === 'claro') add((hayClaro ? r.si : r.no) * (hayClaro ? w : 1), hayClaro ? r.texto : r.textoNo, 'par');
+      else if (r.cond === 'grisClaro') { const g = fx === 'gris' ? x : y; const okG = Lp(g) >= r.min; if (okG) add(r.si * w, r.texto, 'par'); }
+      else if (r.cond === 'navidad') add(Math.max(Cp(x), Cp(y)) >= C.color.saturado ? r.fuerte : r.suave, r.texto, 'par');
+      else if (r.cond === 'marronClaro') { const mr = fx === 'marrón' ? x : y; if (Lp(mr) > r.min) add(r.no, r.textoNo, 'par'); }
+    }
   }
-  porPar.forEach(v => add(v.aj, v.txt, 'color', v.aj < 0));
 
-  if (fam(arriba) === fam(pant)) add(C.reglas.mismoColor.ajuste, `${C.reglas.mismoColor.texto} (${arriba.nombre.toLowerCase()} y ${pant.nombre.toLowerCase()})`, 'mismoColor', true);
+  /* 2. Casi-coincidencia y mismo color entre prendas grandes en contacto */
+  const CI = C.color.casiIgual, MC = C.color.mismoColor;
+  for (const [x, y] of contactos) {
+    const d = dE(x, y), mismaFam = famColor(x) === famColor(y);
+    const apagadoConNegro = (famColor(x) === 'negro' && Cp(y) < CI.cromaApagado) || (famColor(y) === 'negro' && Cp(x) < CI.cromaApagado);
+    const tex = contrasteTextura(x, y);
+    if (d < MC.dE && mismaFam) {
+      if (x === arriba && y === pant) add(tex ? MC.ajusteTextura : MC.ajuste, tex ? MC.textoTextura : MC.texto, 'mismoColor');
+      else add(tex ? MC.ajusteTextura : MC.ajuste, `${x.nombre} y ${y.nombre.toLowerCase()} casi iguales: les falta contraste`, 'mismoColor');
+    } else if (d < CI.dE && Math.abs(Lp(x) - Lp(y)) < CI.dL && Math.max(Lp(x), Lp(y)) < CI.Lmax && (mismaFam || apagadoConNegro)) {
+      add(tex ? CI.ajusteTextura : CI.ajuste, `${x.nombre} y ${y.nombre.toLowerCase()}: dos oscuros casi iguales ${CI.texto}`, 'casiIgual');
+    }
+  }
 
+  /* 3. Todo oscuro (prendas grandes) */
+  const TO = C.color.todoOscuro;
+  if (grandes.length >= 2) {
+    const Ls = grandes.map(x => Lp(x.p)), maxL = Math.max(...Ls), media = Ls.reduce((s, v) => s + v, 0) / Ls.length;
+    if (maxL < TO.Lmax && media < TO.Lmedia && grandes.every(x => Cp(x.p) < C.color.saturado)) {
+      const variedad = new Set(grandes.map(x => textura(x.p))).size >= 2;
+      add(TO.ajuste * (variedad ? TO.factorTextura : 1), TO.texto, 'oscuro');
+    }
+  }
+
+  const PL = C.color.plano;
+  if (grandes.length >= 2 && new Set(grandes.map(x => famColor(x.p))).size === 1) {
+    const Ls = grandes.map(x => Lp(x.p));
+    if (Math.max(...Ls) - Math.min(...Ls) < PL.rango) add(PL.ajuste, PL.texto, 'plano');
+  }
+
+  /* 4. Luminosidad arriba-abajo (Ou y Luo, 2006) */
+  const LU = C.color.luz, dLab = Math.abs(Lp(arriba) - Lp(pant));
+  if (dLab >= LU.min && dLab <= LU.max && Math.max(Lp(arriba), Lp(pant)) >= LU.claro) add(LU.ajuste, LU.texto, 'luz');
+
+  /* 5. Complejidad de la paleta (entropía ponderada por superficie) */
+  const cx = complejidad(z), CX = C.color.complejidad;
+  if (cx.H > CX.umbral) add(-(cx.H - CX.umbral) * CX.factor, `${CX.texto} (${cx.familias.length}: ${cx.familias.join(', ')})`, 'complejidad');
+  else if (cx.H <= CX.bonusHasta && grandes.length >= 2 && !notas.some(n => ['casiIgual', 'mismoColor', 'plano', 'oscuro'].includes(n.regla))) add(CX.bonus, CX.textoBonus, 'complejidad');
+  const NC = C.color.notas;
+  const famRopa = [...new Set(z.filter(x => !['calzado', 'calcetin'].includes(x.rol) && x.a >= NC.areaMin && famColor(x.p) !== 'blanco').map(x => famColor(x.p)))];
+  if (famRopa.length >= 4) add(famRopa.length >= 5 ? NC.cinco : NC.cuatro, `${famRopa.length} ${NC.texto} (${famRopa.join(', ')})`, 'complejidad');
+
+  /* 6. Un solo foco saturado */
+  const focos = [...new Set(z.filter(x => Cp(x.p) >= C.color.saturado && x.a >= 0.02).map(x => famColor(x.p)))];
+  if (focos.length > 1) add(C.color.focos.ajuste, `${C.color.focos.texto} (${focos.join(', ')})`, 'focos');
+  if (calz.llamativo && focos.length > 0) add(C.focoCalzado.ajuste, C.focoCalzado.texto, 'focos');
+
+  const cromaticas = [...new Set(z.filter(x => x.rol !== 'calcetin' && !acromatica(x.p)).map(x => famColor(x.p)))];
+  if (z.some(x => famColor(x.p) === 'rojo' && Cp(x.p) >= C.color.saturado) && cromaticas.every(f => f === 'rojo' || f === 'tierra') && cromaticas.includes('tierra'))
+    add(C.color.calidoSobreCalido.ajuste, C.color.calidoSobreCalido.texto, 'calido');
+
+  /* 7. Neutros cálido y frío grandes en contacto */
+  for (const [x, y, w] of contactos) {
+    if (w < 1 && x !== ext) continue;
+    const fx = famColor(x), fy = famColor(y);
+    if ((fx === 'gris' && fam(y) === 'beige') || (fy === 'gris' && fam(x) === 'beige')) { add(C.color.calidoFrio.ajuste, C.color.calidoFrio.texto, 'calidoFrio'); break; }
+  }
+
+  /* 8. Capas: regla de los tres tonos con cazadora y lo que asoma bajo el jersey */
   if (ext) {
-    const malos = [];
-    if (fam(ext) === fam(pant)) malos.push('el pantalón');
-    if (fam(ext) === fam(arriba)) malos.push('lo de arriba');
-    if (malos.length) add(C.reglas.exteriorMismo.ajuste * malos.length, `${C.reglas.exteriorMismo.texto} ${malos.join(' ni con ')}`, 'exterior', true);
-    else add(C.reglas.exteriorContraste.ajuste, C.reglas.exteriorContraste.texto, 'exterior');
-  }
-
-  /* Capa sobre base: el cuello que asoma tiene que contrastar con el jersey (claro bajo oscuro, oscuro bajo claro)
-     o ser otro tono del mismo color con diferencia clara. Ej.: blanco o celeste bajo marino, sí; oliva bajo marrón oscuro, no. */
-  if (capa) {
-    const ratio = (Math.max(lum(base.hex), lum(capa.hex)) + 0.05) / (Math.min(lum(base.hex), lum(capa.hex)) + 0.05);
-    const mismoGrupo = (C.grupos[fam(base)] || fam(base)) === (C.grupos[fam(capa)] || fam(capa));
-    const K = C.reglas.capaContraste;
-    if (ratio < (mismoGrupo ? K.ratioTonal : K.ratio)) add(K.ajuste, `${K.texto} (${base.nombre.toLowerCase()} bajo ${capa.nombre.toLowerCase()})`, 'capa', true);
+    const T = C.capas.tresTonos, mid = arriba, tonos = [ext, mid, pant];
+    const distintos = tonos.every((p, i) => tonos.every((q, j) => i >= j || Math.abs(Lp(p) - Lp(q)) >= T.dL));
+    const igualOscuros = Lp(ext) < T.oscuro && Lp(mid) < T.oscuro;
+    if (!distintos && !igualOscuros) add(T.ajuste, T.texto, 'capas');
   }
   if (capa) {
-    if (base.tipo === 'camisa') add(C.reglas.camisaJersey.ajuste, C.reglas.camisaJersey.texto, 'capa');
-    else if (base.tipo === 'polo' || base.tipo === 'polo-punto') add(C.reglas.poloJersey.ajuste, C.reglas.poloJersey.texto, 'capa');
-    else add(C.reglas.camisetaJersey.ajuste, C.reglas.camisetaJersey.texto, 'capa');
+    const K = C.capas.cuello;
+    const dLc = Math.abs(Lp(base) - Lp(capa)), tonalC = famColor(base) === famColor(capa);
+    if (Lp(base) >= K.claro) add(K.bonus, K.textoBonus, 'cuello');
+    else if (tonalC && dLc >= K.tonal) add(0, '', 'cuello');
+    else {
+      if (dLc < K.funde) add(K.ajusteFunde, K.textoFunde, 'cuello');
+      if (!tonalC) {
+        add(K.oscuro, K.textoOscuro, 'cuello');
+        const fb = famColor(base), repite = z.some(x => x.p !== base && x.rol !== 'calcetin' && famColor(x.p) === fb);
+        if (!ACROMATICOS.has(fb) && !repite) add(K.sinRepetir, K.textoSinRepetir, 'cuello');
+      }
+    }
+    // El rojo y el verde juntos en el cuello también cuentan
+    const r = PARES.get(parKey(famPar(base), famPar(capa)));
+    if (r && r.cond === 'navidad') add(Math.max(Cp(base), Cp(capa)) >= C.color.saturado ? r.fuerte : r.suave, r.texto, 'par');
+    const E = C.capas.estructura;
+    const e = base.tipo === 'camisa' ? E.camisa : base.tipo === 'camiseta' ? E.camiseta : textura(base) === 'punto' ? E.poloPunto : E.polo;
+    add(e[0], e[1], 'estructura');
   }
 
-  /* Paleta: colores de la ropa (los tonos de un grupo cuentan como uno; el calzado de piel o zapatilla neutra y el calcetín no cuentan) */
-  const ropa = [base, capa, ext, pant].filter(Boolean);
-  const grupo = p => C.grupos[fam(p)] || fam(p);
-  const colores = [...new Set(ropa.map(grupo))];
-  const P_ = C.reglas.paleta;
-  // Con 4 colores o más, las parejas sueltas que «casan» no compensan el conjunto: se anulan
-  if (colores.length >= 4) for (let i = notas.length - 1; i >= 0; i--) if (notas[i].regla === 'color' && notas[i].ajuste > 0) notas.splice(i, 1);
-  if (colores.length >= 5) add(P_.ajuste5, `${P_.texto} (${colores.length}: ${colores.join(', ')}). Máximo ${P_.max}, contando el blanco`, 'paleta', true);
-  else if (colores.length === 4) add(P_.ajuste4, `${P_.texto} (4: ${colores.join(', ')}). Máximo ${P_.max}, contando el blanco`, 'paleta', true);
-  else if (colores.length <= P_.corta && ropa.length >= 2) add(P_.bonus, `${P_.textoCorta} (${colores.join(' y ')})`, 'paleta');
-  if (capa && ext) {
-    const g3 = [base, capa, ext].map(grupo).filter(g => g !== 'blanco');
-    if (g3.length === 3 && new Set(g3).size === 3) add(C.reglas.tresCapas.ajuste, C.reglas.tresCapas.texto, 'capas', true);
-  }
-  /* Un solo color de acento */
-  const acentos = [...new Set(ropa.map(fam).filter(f => C.acentos.includes(f)).map(f => C.grupos[f] || f))];
-  if (acentos.length > C.reglas.acentos.max) add(C.reglas.acentos.ajuste, `${C.reglas.acentos.texto} (${acentos.join(', ')})`, 'acentos', true);
-  if (calz.llamativo && acentos.length > 0) add(C.reglas.puntoFocal.ajuste, C.reglas.puntoFocal.texto, 'puntoFocal');
+  /* 9. Formalidad: rango global entre prendas visibles */
+  const Fs = z.filter(x => x.rol !== 'calcetin' && x.p.formalidad != null && !(x.rol === 'base' && capa)).map(x => ({ p: x.p, F: formalidadEf(x.p) }));
+  const hi = Fs.reduce((a, b) => b.F > a.F ? b : a), lo = Fs.reduce((a, b) => b.F < a.F ? b : a), R = C.formalidad.rango;
+  const rango = hi.F - lo.F;
+  if (rango >= R.duro) add(R.ajuste, `${R.textoDuro}: ${hi.p.nombre.toLowerCase()} con ${lo.p.nombre.toLowerCase()}`, 'formalidad', true);
+  else if (rango >= R.suave) add(R.ajuste, `${R.texto}: ${hi.p.nombre.toLowerCase()} con ${lo.p.nombre.toLowerCase()}`, 'formalidad');
 
-  /* Todo oscuro */
-  if (ropa.every(oscura)) add(C.reglas.todoOscuro.ajuste, C.reglas.todoOscuro.texto, 'oscuro', true);
-
-  /* Formalidad */
-  const conF = [base, capa, ext, pant, calz].filter(p => p && p.formalidad != null);
-  const hi = conF.reduce((a, b) => b.formalidad > a.formalidad ? b : a), lo = conF.reduce((a, b) => b.formalidad < a.formalidad ? b : a);
-  if (hi.formalidad - lo.formalidad > C.reglas.formalidad.maxDif) add(C.reglas.formalidad.ajuste, `${C.reglas.formalidad.texto}: ${hi.nombre.toLowerCase()} (F${hi.formalidad}) con ${lo.nombre.toLowerCase()} (F${lo.formalidad})`, 'formalidad', true);
-
-  /* Texturas (apartado 6) */
+  /* 10. Texturas */
   const tx = textura(arriba);
-  if (tx === 'punto' && textura(calz) === 'ante' && (pant.tipo === 'chino' || pant.tipo === 'vaquero')) add(C.reglas.texturas.ajuste, C.reglas.texturas.texto, 'texturas');
+  if (tx === 'punto' && textura(calz) === 'ante' && (pant.tipo === 'chino' || pant.tipo === 'vaquero') && rango < R.suave) add(C.texturas.mezcla.ajuste, C.texturas.mezcla.texto, 'texturas');
   const txSup = ext ? textura(ext) : tx;
-  if (txSup === textura(pant) || tx === textura(pant)) add(C.reglas.mismoTejido.ajuste, C.reglas.mismoTejido.texto, 'texturas');
+  if (txSup === textura(pant) || tx === textura(pant)) add(C.texturas.mismoTejido.ajuste, C.texturas.mismoTejido.texto, 'texturas');
 
-  /* Calzado (apartado 4) */
+  /* 11. Calzado */
   const reglasZap = C.calzado[calz.id] || C.calzado['_' + calz.tipo] || [];
   for (const r of reglasZap) {
-    if (cumple(r.pantalon, pant) && cumple(r.base, base)) { add(r.ajuste, rellenar(r.texto, { pf: fam(pant) }), 'calzado', !!r.nunca); break; }
+    if (cumple(r.pantalon, pant) && cumple(r.base, base)) { add(r.ajuste, rellenar(r.texto, { pf: fam(pant) }), 'calzado'); break; }
   }
+  if (calz.id === 'zap-derby-cognac' && famPar(arriba) === 'azul cielo') add(C.cognacCeleste.ajuste, C.cognacCeleste.texto, 'calzado');
 
-  /* Calcetines (apartado 5) */
+  /* 12. Calcetines: acompañan al pantalón */
   if (calc) {
     const K = C.calcetines, sf = fam(calc), pf = fam(pant);
     if (sf === 'blanco') {
-      let castigo = false;
-      if (pant.tipo === 'chino') { add(K.blancoChino.ajuste, K.blancoChino.texto, 'calcetin', true); castigo = true; }
-      if (calz.tipo === 'derby') { add(K.blancoDerby.ajuste, K.blancoDerby.texto, 'calcetin', true); castigo = true; }
-      if (!castigo) {
-        if (pant.tipo === 'vaquero' && calz.tipo === 'zapatilla') add(K.blancoOk.ajuste, K.blancoOk.texto, 'calcetin');
-        else add(K.blancoOtro.ajuste, K.blancoOtro.texto, 'calcetin');
-      }
+      if (calz.tipo === 'derby') add(-20, K.blancoDerby.texto, 'calcetin', true);
+      else if (pant.tipo === 'chino') add(K.blancoChinoZapatilla.ajuste, K.blancoChinoZapatilla.texto, 'calcetin');
+      else if (pant.tipo === 'vaquero') add(K.blancoOk.ajuste, K.blancoOk.texto, 'calcetin');
     } else {
       if (pant.tipo === 'chino') {
         const rec = K.recomendado[pf] || [pf];
-        if (sf === pf || rec.includes(sf)) add(K.coincide.ajuste, rellenar(K.coincide.texto, { sf, pf }), 'calcetin');
-        else if (lum(calc.hex) < lum(pant.hex)) add(K.masOscuro.ajuste, K.masOscuro.texto, 'calcetin');
-        else add(K.masClaro.ajuste, K.masClaro.texto, 'calcetin');
+        if (rec.includes(sf)) add(K.coincide.ajuste, rellenar(K.coincide.texto, { sf, pf }), 'calcetin');
+        else if (Lp(calc) > Lp(pant) + K.masClaro.dL) add(K.masClaro.ajuste, K.masClaro.texto, 'calcetin');
+        else add(K.masOscuro.ajuste, K.masOscuro.texto, 'calcetin');
       }
-      if (calz.tipo === 'derby') {
-        if (K.oscuros.includes(sf)) add(K.derbyOscuro.ajuste, K.derbyOscuro.texto, 'calcetin');
-        else add(K.blancoDerby.ajuste, K.blancoDerby.texto, 'calcetin', true);
-      }
+      if (calz.tipo === 'derby') add(Lp(calc) < 0.7 ? K.derbyOscuro.ajuste : K.claroDerby.ajuste, Lp(calc) < 0.7 ? K.derbyOscuro.texto : K.claroDerby.texto, 'calcetin');
     }
   }
 
-  /* Contexto: tiempo, temporada, rotación, tipo de día */
-  if (ctx) {
-    const t = ctx.tiempo, u = ctx.umbrales || AJUSTES_BASE.umbrales;
-    if (t) {
-      if (t.lluvia != null && t.lluvia >= u.lluvia) {
-        for (const p of [base, capa, ext, pant, calz]) {
-          if (!p) continue;
-          const pen = C.lluvia.penaliza[p.id], fav = C.lluvia.favorece[p.id];
-          if (pen) add(pen[0], pen[1], 'lluvia');
-          if (fav) add(fav[0], fav[1], 'lluvia');
-        }
-      }
-      if (t.ts != null && t.tmax != null && Math.abs(t.tmax - t.ts) > u.difTrayecto) {
-        const T = C.trayecto;
-        if (t.ts >= u.unaCapa && t.ts < u.sinCapa) {
-          if (ext && !capa) add(T.exteriorFacil.ajuste, T.exteriorFacil.texto, 'trayecto');
-          if (capa && !ext) add(T.soloJersey.ajuste, T.soloJersey.texto, 'trayecto');
-        }
-        if (capa || ext) {
-          if (base.formalidad >= 3) add(T.baseSola.ajuste, T.baseSola.texto, 'trayecto');
-          else if (capa) add(T.baseNoSola.ajuste, T.baseNoSola.texto, 'trayecto');
-        }
-      }
-      if (t.tmax != null && t.tmax >= u.baseLigera) {
-        if (/lino/i.test(base.material || '')) add(C.calor.lino.ajuste, C.calor.lino.texto, 'calor');
-        else if (base.tipo === 'polo-punto') add(C.calor.poloPunto.ajuste, C.calor.poloPunto.texto, 'calor');
-      }
-      if (t.ts != null && t.ts < u.dosCapas && ext && ext.abrigo >= 3) add(C.abrigoInvierno.ajuste, C.abrigoInvierno.texto, 'frio');
-    }
-    if (ctx.mes) {
-      for (const p of [base, capa, ext]) if (p && !enMes(p, ctx.mes)) add(C.temporada.ajuste, `${p.nombre}: ${C.temporada.texto}`, 'temporada');
-      const tz = C.temporadaCalzado[calz.id];
-      if (tz && !tz.meses.includes(ctx.mes)) add(tz.ajuste, tz.texto, 'temporada');
-    }
-    if (ctx.usos && ctx.usos.length && ctx.hoy) aplicarRotacion(o, M, ctx, add);
-    const TD = ctx.tipoDia && C.tipoDia[ctx.tipoDia];
-    if (TD && TD.bonus) {
-      const b = TD.bonus[ocasionDe(o, M)];
-      if (b) add(b, TD.textoBonus, 'tipoDia');
-    }
-    if (TD && TD.bonusBase && base.formalidad >= TD.bonusBase.fMin) add(TD.bonusBase.ajuste, TD.bonusBase.texto, 'tipoDia');
-  }
-
-  // Rendimiento decreciente: por encima de C.tope.desde, lo que suma cuenta C.tope.factor
+  /* Estilo: base + ajustes, con rendimiento decreciente de lo que suma */
   const positivos = notas.filter(n => n.ajuste > 0).reduce((a, n) => a + n.ajuste, 0);
   if (positivos > C.tope.desde) add(-(positivos - C.tope.desde) * (1 - C.tope.factor), C.tope.texto, 'tope');
-  let suma = 0; for (const n of notas) suma += n.ajuste;
-  const bruto = Math.round((C.puntosBase + suma) * 10) / 10;
+  const sumaEstilo = notas.reduce((s, n) => s + n.ajuste, 0);
+  const estiloBruto = C.puntosBase + sumaEstilo;
+
+  /* Contexto: tiempo, tipo de día, temporada, rotación y tus gustos */
+  let contexto = 100;
+  if (ctx) {
+    const addC = (ajuste, texto, regla, duro) => { if (ajuste !== 0 || duro) { notas.push({ ajuste: Math.round(ajuste * 10) / 10, texto, regla, duro: !!duro, ambito: 'contexto' }); contexto += ajuste; } };
+    aplicarContexto(o, M, ctx, z, addC);
+    contexto = Math.max(0, Math.min(100, contexto));
+  }
+
   const reglas = notas.filter(n => n.duro).map(n => n.texto);
+  let estilo = Math.max(0, Math.min(100, Math.round(estiloBruto)));
+  let bruto = estiloBruto - C.pesoContexto * (100 - contexto);
   let nota = Math.max(0, Math.min(100, Math.round(bruto)));
-  if (reglas.length) nota = Math.min(nota, C.notaMaxRegla);
+  if (reglas.length) { nota = Math.min(nota, C.notaMaxRegla); bruto = Math.min(bruto, C.notaMaxRegla); }
   const v = C.veredicto, tv = C.textosVeredicto;
   const veredicto = reglas.length ? tv.no : nota >= v.pega ? tv.pega : nota >= v.matices ? tv.matices : tv.no;
   notas.sort((a, b) => (b.duro ? 1 : 0) - (a.duro ? 1 : 0) || Math.abs(b.ajuste) - Math.abs(a.ajuste));
-  return { nota, bruto: reglas.length ? Math.min(bruto, C.notaMaxRegla) : bruto, veredicto, ocasion: ocasionDe(o, M), notas, reglas };
+  return { nota, estilo, contexto: Math.round(contexto), bruto, veredicto, ocasion: ocasionDe(o, M), notas, reglas, complejidad: cx.H };
+}
+
+/* Contexto: tipo de día (objetivo y mínimo de formalidad), tiempo, temporada, rotación y gustos */
+function aplicarContexto(o, M, ctx, z, add) {
+  const C = CFG;
+  const base = M[o.base], capa = o.capa ? M[o.capa] : null, ext = o.exterior ? M[o.exterior] : null, pant = M[o.pantalon], calz = M[o.calzado];
+  const TD = ctx.tipoDia && C.tipoDia[ctx.tipoDia];
+  if (TD) {
+    // Obligatorio: mínimo de formalidad en cada prenda visible y camiseta sola
+    const visibles = z.filter(x => x.rol !== 'calcetin' && x.p.formalidad != null && !(x.rol === 'base' && capa));
+    for (const x of visibles) if (x.p.formalidad < TD.minimo) add(-20, `${x.p.nombre}: no va en un día «${TD.nombre}»`, 'dia', true);
+    if (!TD.camisetaSola && base.tipo === 'camiseta' && !capa) add(-20, `Camiseta sin jersey: no va en un día «${TD.nombre}»`, 'dia', true);
+    // Suave: ajuste al objetivo de formalidad del día
+    const AF = C.ajusteFormalidad, t = visibles.reduce((s, x) => s + x.a, 0) || 1;
+    const media = visibles.reduce((s, x) => s + x.a * formalidadEf(x.p), 0) / t, dist = Math.abs(media - TD.objetivo);
+    if (dist > AF.tolerancia) add(AF.porPunto * (dist - AF.tolerancia), media < TD.objetivo ? `Algo informal para un día «${TD.nombre}»` : `Algo formal para un día «${TD.nombre}»`, 'dia');
+    for (const x of visibles) if (formalidadEf(x.p) < TD.objetivo - AF.bajo && x.p.formalidad >= TD.minimo) add(AF.ajusteBajo, `${x.p.nombre} rebaja el tono para un día «${TD.nombre}»`, 'dia');
+    // Al quitarse el jersey en la oficina no conviene quedarse en camiseta
+    if (capa && base.tipo === 'camiseta' && !TD.camisetaSola) add(C.trayecto.baseNoSola.ajuste, C.trayecto.baseNoSola.texto, 'trayecto');
+  }
+  const t = ctx.tiempo, u = ctx.umbrales || AJUSTES_BASE.umbrales;
+  if (t) {
+    if (t.lluvia != null && t.lluvia >= u.lluvia) {
+      for (const p of [base, capa, ext, pant, calz]) {
+        if (!p) continue;
+        const pen = C.lluvia.penaliza[p.id], fav = C.lluvia.favorece[p.id];
+        if (pen) add(pen[0], pen[1], 'lluvia');
+        if (fav) add(fav[0], fav[1], 'lluvia');
+      }
+    }
+    if (t.ts != null && t.tmax != null && Math.abs(t.tmax - t.ts) > u.difTrayecto) {
+      const T = C.trayecto;
+      if (t.ts >= u.unaCapa && t.ts < u.sinCapa) {
+        if (ext && !capa) add(T.exteriorFacil.ajuste, T.exteriorFacil.texto, 'trayecto');
+        if (capa && !ext) add(T.soloJersey.ajuste, T.soloJersey.texto, 'trayecto');
+      }
+      if ((capa || ext) && base.formalidad >= 3) add(T.baseSola.ajuste, T.baseSola.texto, 'trayecto');
+    }
+    if (t.tmax != null && t.tmax >= u.baseLigera) {
+      if (/lino/i.test(base.material || '')) add(C.calor.lino.ajuste, C.calor.lino.texto, 'calor');
+      else if (base.tipo === 'polo-punto') add(C.calor.poloPunto.ajuste, C.calor.poloPunto.texto, 'calor');
+    }
+    if (t.ts != null && t.ts < u.dosCapas && ext && ext.abrigo >= 3) add(C.abrigoInvierno.ajuste, C.abrigoInvierno.texto, 'frio');
+  }
+  if (ctx.mes) {
+    for (const p of [base, capa, ext]) if (p && !enMes(p, ctx.mes)) add(C.temporada.ajuste, `${p.nombre}: ${C.temporada.texto}`, 'temporada');
+    const tz = C.temporadaCalzado[calz.id];
+    if (tz && !tz.meses.includes(ctx.mes)) add(tz.ajuste, tz.texto, 'temporada');
+  }
+  if (ctx.usos && ctx.usos.length && ctx.hoy) aplicarRotacion(o, M, ctx, add);
+  if (ctx.gustos) aplicarGustos(o, ctx.gustos, add);
+}
+// «No me convence»: penaliza el outfit exacto y, con menos fuerza, la pareja arriba + pantalón
+function aplicarGustos(o, gustos, add) {
+  const G = CFG.gustos, no = gustos.no || [];
+  if (!no.length) return;
+  const k = claveSinCalcetin(o), par = arribaDe(o) + '|' + o.pantalon;
+  if (no.some(x => x.clave === k)) add(G.outfit, G.textoOutfit, 'gustos');
+  else {
+    const n = no.filter(x => x.par === par).length;
+    if (n) add(Math.max(G.maxPar, G.par * n), G.textoPar, 'gustos');
+  }
 }
 
 function diasEntre(a, b) { return Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / 86400000); }
@@ -910,7 +1119,6 @@ function generar(prendas, ctx, opciones) {
   const M = mapa(prendas);
   const G = porHueco(opciones.todas ? prendas.filter(p => !p.archivada) : disponibles(prendas));
   const t = ctx && ctx.tiempo, u = (ctx && ctx.umbrales) || AJUSTES_BASE.umbrales;
-  const permitidas = ctx && ctx.tipoDia ? CFG.tipoDia[ctx.tipoDia].ocasiones : null;
   // Prefiltro por tiempo: qué combinaciones de capa/exterior se permiten
   let capas = [null, ...G.capa], exts = [null, ...G.exterior];
   if (t && t.ts != null) {
@@ -926,7 +1134,6 @@ function generar(prendas, ctx, opciones) {
     if (t && !encajaTiempo(Object.assign({}, parcial), M, t, u).ok) continue;
     for (const p of G.pantalon) for (const z of G.calzado) for (const s of calcs) {
       const o = { base: b.id, capa: c ? c.id : null, exterior: e ? e.id : null, pantalon: p.id, calzado: z.id, calcetin: s ? s.id : null };
-      if (permitidas && !permitidas.includes(ocasionDe(o, M))) continue;
       const ev = evaluar(o, M, ctx);
       if (ev.reglas.length && !opciones.todas && !opciones.incluirInvalidas) continue;
       res.push({ o, ...ev, clave: claveOutfit(o) });
@@ -964,29 +1171,36 @@ function proponer(prendas, ctx, n) {
   return { lista, propuestas: elegirVariadas(lista, n || 3), abrigo: avisoAbrigo(prendas, ctx && ctx.tiempo, ctx && ctx.umbrales) };
 }
 
-/* Videollamada: solo parte de arriba, F ≥ 3 */
+/* Videollamada: solo parte de arriba, F ≥ 3. Se juzga con las mismas reglas de cuello, parejas y temporada. */
 function evaluarArriba(o, M, ctx) {
-  const b = M[o.base], c = o.capa ? M[o.capa] : null, notas = [], R = CFG.reglas;
-  const reglas = [];
+  const C = CFG, b = M[o.base], c = o.capa ? M[o.capa] : null, notas = [], reglas = [];
+  const add = (ajuste, texto) => { if (ajuste) notas.push({ ajuste: Math.round(ajuste * 10) / 10, texto, ambito: 'estilo' }); };
   if (c) {
-    const ratio = (Math.max(lum(b.hex), lum(c.hex)) + 0.05) / (Math.min(lum(b.hex), lum(c.hex)) + 0.05);
-    const K = CFG.reglas.capaContraste, mismo = (CFG.grupos[fam(b)] || fam(b)) === (CFG.grupos[fam(c)] || fam(c));
-    if (ratio < (mismo ? K.ratioTonal : K.ratio)) { reglas.push(K.texto); notas.push({ ajuste: K.ajuste, texto: K.texto, duro: true }); }
-    const fb = fam(b), fc = fam(c), r = PARES.get(parKey(fb, fc));
-    if (r && r.nivel === 'evitar' && fb !== fc) reglas.push(r.texto);
-    if (fb !== fc && r) notas.push({ ajuste: r.nivel === 'evitar' ? r.ajuste : (r.nivel === 'muy' ? CFG.colores.muyBuena : CFG.colores.correcta), texto: r.texto });
-    else if (fb !== fc && (fb === 'blanco' || fc === 'blanco')) notas.push({ ajuste: CFG.colores.correcta, texto: CFG.colores.blanco.texto });
-    if (b.tipo === 'camisa') notas.push({ ajuste: R.camisaJersey.ajuste, texto: R.camisaJersey.texto });
-    else if (b.tipo === 'camiseta') notas.push({ ajuste: R.camisetaJersey.ajuste, texto: R.camisetaJersey.texto });
-    else notas.push({ ajuste: R.poloJersey.ajuste, texto: R.poloJersey.texto });
+    const fb = famPar(b), fc = famPar(c), r = PARES.get(parKey(fb, fc));
+    if (fb === fc) { if (Math.abs(Lp(b) - Lp(c)) >= C.tonal.dL) add(C.tonal.ajuste, C.tonal.texto); }
+    else if (r) {
+      if (r.v === 'muy') add(C.muyBuena, r.texto);
+      else if (r.v === 'ok') add(C.correcta, r.texto);
+      else if (r.cond === 'navidad') add(Math.max(Cp(b), Cp(c)) >= C.color.saturado ? r.fuerte : r.suave, r.texto);
+      else if (r.cond === 'dL') { const okL = Math.abs(Lp(b) - Lp(c)) >= r.min; add(okL ? r.si : r.no, okL ? r.texto : r.textoNo); }
+    } else if (fb === 'blanco' || fc === 'blanco') add(C.blanco.ajuste, C.blanco.texto);
+    const K = C.capas.cuello;
+    const dLc = Math.abs(Lp(b) - Lp(c)), tonalC = famColor(b) === famColor(c);
+    if (Lp(b) >= K.claro) add(K.bonus, K.textoBonus);
+    else if (!(tonalC && dLc >= K.tonal)) {
+      if (dLc < K.funde) add(K.ajusteFunde, K.textoFunde);
+      if (!tonalC) add(K.oscuro, K.textoOscuro);
+    }
+    const E = C.capas.estructura;
+    const e = b.tipo === 'camisa' ? E.camisa : b.tipo === 'camiseta' ? E.camiseta : textura(b) === 'punto' ? E.poloPunto : E.polo;
+    add(e[0], e[1]);
   }
-  if (ctx && ctx.mes) for (const p of [b, c]) if (p && !enMes(p, ctx.mes)) notas.push({ ajuste: CFG.temporada.ajuste, texto: `${p.nombre}: ${CFG.temporada.texto}` });
-  const bruto = CFG.puntosBase + notas.reduce((s, x) => s + x.ajuste, 0);
-  let nota = Math.max(0, Math.min(100, Math.round(bruto)));
-  if (reglas.length) nota = Math.min(nota, CFG.notaMaxRegla);
-  const v = CFG.veredicto, tv = CFG.textosVeredicto;
+  if (ctx && ctx.mes) for (const p of [b, c]) if (p && !enMes(p, ctx.mes)) add(C.temporada.ajuste, `${p.nombre}: ${C.temporada.texto}`);
+  const bruto = C.puntosBase + notas.reduce((s, x) => s + x.ajuste, 0);
+  const nota = Math.max(0, Math.min(100, Math.round(bruto)));
+  const v = C.veredicto, tv = C.textosVeredicto;
   notas.sort((x, y) => Math.abs(y.ajuste) - Math.abs(x.ajuste));
-  return { nota, bruto, notas, reglas, veredicto: reglas.length ? tv.no : nota >= v.pega ? tv.pega : nota >= v.matices ? tv.matices : tv.no };
+  return { nota, estilo: nota, contexto: 100, bruto, notas, reglas, veredicto: nota >= v.pega ? tv.pega : nota >= v.matices ? tv.matices : tv.no };
 }
 function proponerVideollamada(prendas, ctx, n, incluirInvalidas) {
   const M = mapa(prendas), G = porHueco(disponibles(prendas)), F = CFG.videollamadaF;
@@ -1087,7 +1301,8 @@ function contarBuenos(prendas) {
 /* Frase de estilista: por qué funciona + cómo llevarlo */
 function fraseEstilista(o, M, ev, ctx) {
   const base = M[o.base], capa = o.capa && M[o.capa], ext = o.exterior && M[o.exterior], pant = M[o.pantalon], calz = M[o.calzado];
-  const buena = ev.notas.filter(n => n.ajuste > 0 && (n.regla === 'color' || n.regla === 'calzado' || n.regla === 'capa'))[0];
+  const buena = ev.notas.filter(n => n.ajuste > 0 && ['par', 'cuello', 'complejidad', 'luz', 'calzado', 'estructura'].includes(n.regla))[0];
+  const pega = ev.notas.filter(n => n.ajuste < 0 && n.ambito === 'estilo' && n.regla !== 'tope')[0];
   const tips = [];
   if (base.tipo === 'camisa') tips.push('camisa por dentro');
   if (capa && (base.tipo === 'camisa' || base.tipo === 'polo' || base.tipo === 'polo-punto')) tips.push('cuello por fuera del jersey');
@@ -1099,22 +1314,92 @@ function fraseEstilista(o, M, ev, ctx) {
   const t = ctx && ctx.tiempo, u = (ctx && ctx.umbrales) || AJUSTES_BASE.umbrales;
   if (t && t.ts != null && t.tmax != null && Math.abs(t.tmax - t.ts) > u.difTrayecto && (capa || ext)) tips.unshift(ext ? 'cazadora fuera al llegar a Barcelona' : 'jersey fuera al llegar a Barcelona');
   const porque = buena ? buena.texto : (ev.nota >= CFG.veredicto.pega ? 'Combinación limpia y sin riesgos' : 'Correcto, sin más');
+  const matiz = pega && ev.nota < CFG.veredicto.pega + 6 ? ` Ojo: ${pega.texto.charAt(0).toLowerCase() + pega.texto.slice(1)}.` : '';
   const como = tips.slice(0, 2);
-  return porque + '.' + (como.length ? ' ' + como[0].charAt(0).toUpperCase() + como.join(', ').slice(1) + '.' : '');
+  return porque + '.' + matiz + (como.length ? ' ' + como[0].charAt(0).toUpperCase() + como.join(', ').slice(1) + '.' : '');
 }
 
-/* ---------- Tests ---------- */
+/* ---------- Tests ----------
+   Casos de calibración: los 30 del informe «Motor de compatibilidad» (etiquetas R recomendable, A aceptable,
+   D discutible, I incompatible, X excepción, ADV adversarial), los fallos reales de Eric y los requisitos de la V1. */
+const CASOS_INFORME = [
+  // [n, etiqueta, base, capa, exterior, pantalon, calzado, calcetin, tipoDia, mes]
+  [1, 'R', 'z-tostado', null, null, 'ch-marino', 'zap-derby-oscuro', 't-calc-marino', 'normal'],
+  [2, 'R', 'camisa-celeste', 'u-merino-marron', null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'reunion'],
+  [3, 'R', 'camisa-blanca', 'jer-gris', null, 'ch-marino', 'zap-derby-oscuro', 't-calc-marino', 'normal'],
+  [4, 'R', 'u-supima', 'u-merino-rojo', null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris', 'normal'],
+  [5, 'R', 'z-celeste', null, null, 'ch-beige', 'zap-derby-cognac', null, 'normal', 7],
+  [6, 'R', 'z-marron', null, null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],
+  [7, 'R', 'camisa-blanca', 'jer-marino', 'caz-beige', 'ch-gris', 'zap-derby-oscuro', 'calc-gris', 'normal'],
+  [8, 'R', 'z-tostado', null, 'u-harrington', 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],
+  [9, 'R', 'polo-verde', null, null, 'ch-beige', 'zap-derby-oscuro', 't-calc-marron', 'normal'],
+  [10, 'R', 'camisa-celeste', 'jer-marino', null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'reunion'],
+  [11, 'A', 'polo-marino', null, null, 'ch-beige', 'mr530', null, 'normal'],
+  [12, 'A', 'u-supima', 'jer-negro', null, 'ch-gris', 'u740', 'calc-gris', 'normal'],
+  [13, 'A', 'u-supima', 'u-merino-marron', null, 'ch-negro', 'zap-derby-oscuro', 'calc-negro', 'normal'],
+  [14, 'R', 'u-supima', null, 'u-harrington', 'vaqueros', 'mr530', null, 'casual'],
+  [15, 'X', 'u-supima', 'jer-marino', null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
+  [16, 'D', 'z-marron', null, null, 'ch-negro', 'zap-derby-oscuro', 'calc-negro', 'normal'],
+  [17, 'ADV', 'polo-negro', null, 'u-harrington', 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
+  [18, 'ADV', 'camisa-blanca', 'jer-marino', null, 'vaqueros', 'vans', 'calc-gris', 'normal'],
+  [20, 'ADV', 'polo-verde', 'u-merino-rojo', null, 'ch-beige', 'zap-derby-oscuro', 't-calc-marron', 'normal'],
+  [21, 'D', 'z-tostado', null, null, 'ch-negro', 'zap-derby-cognac', 'calc-negro', 'normal'],
+  [22, 'D', 't-polo-gris', 'jer-gris', null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris', 'normal'],
+  [23, 'A', 'u-supima', 'u-merino-rojo', null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],
+  [24, 'A', 'z-marron', 'u-merino-rojo', null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
+  [25, 'R', 'polo-verde', null, 'caz-beige', 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
+  [26, 'I', 'cam-negra', null, null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],
+  [27, 'A', 'polo-negro', null, null, 'vaqueros', 'vans', 'calc-blanco', 'casual'],
+  [28, 'D', 'u-supima', 'jer-marino', null, 'ch-negro', 'u740', 'calc-negro', 'normal'],
+  [29, 'I', 'camisa-celeste', null, null, 'ch-gris', 'zap-derby-oscuro', 'calc-blanco', 'normal'],
+  [30, 'A', 'u-supima', 'u-merino-marron', null, 'ch-beige', 'mr530', 'calc-blanco', 'casual']
+];
+// Bandas de nota por etiqueta (las del informe son orientativas)
+const BANDAS = { R: [78, 100], A: [62, 84], D: [45, 74], X: [55, 82], I: [0, 64], ADV: [0, 64] };
+// Prendas solo para tests (compras pendientes o casos del informe): no están en tu armario
+const PRENDAS_TEST = [
+  P('t-calc-marino', 'Calcetines marino', 'calcetin', 'calcetin', 'marino', '#232b3f', null, 0),
+  P('t-calc-marron', 'Calcetines marrón', 'calcetin', 'calcetin', 'marrón', '#4b3426', null, 0),
+  P('t-polo-gris', 'Polo piqué gris', 'base', 'polo', 'gris', '#9a9da1', 3, 1, { manga: 'corta', material: 'Piqué' })
+];
 function runTests(silencioso) {
   const guardado = CFG; CFG = CONFIG; PARES = construirPares(CFG);
   const resultados = [];
   const ok = (nombre, cond, info) => resultados.push({ nombre, ok: !!cond, info: info || '' });
+  const o6 = (b, c, e, p, z, s) => ({ base: b, capa: c, exterior: e, pantalon: p, calzado: z, calcetin: s });
   try {
-    const inv = clonar(INVENTARIO_BASE), M = mapa(inv);
+    const inv = clonar(INVENTARIO_BASE), M = mapa(inv.concat(clonar(PRENDAS_TEST)));
+    // 1. Casos del informe con su contexto
+    const porEtiqueta = {};
+    for (const c of CASOS_INFORME) {
+      const e = evaluar(o6(c[2], c[3], c[4], c[5], c[6], c[7]), M, { tipoDia: c[8], mes: c[9] || 10 });
+      const [mn, mx] = BANDAS[c[1]], dura = c[1] === 'I' || c[1] === 'ADV';
+      (porEtiqueta[c[1]] = porEtiqueta[c[1]] || []).push(e.nota);
+      ok(`Informe caso ${c[0]} (${c[1]}): nota entre ${mn} y ${mx}${dura ? ' y «No pega»' : ''}`, e.nota >= mn && e.nota <= mx && (!dura || e.veredicto === 'No pega'),
+        `${e.nota} (estilo ${e.estilo}, contexto ${e.contexto}) · ${e.veredicto}${e.reglas.length ? ' · ' + e.reglas[0] : ''}`);
+    }
+    const media = k => { const v = porEtiqueta[k] || []; return v.reduce((s, x) => s + x, 0) / (v.length || 1); };
+    const malos = (porEtiqueta.I || []).concat(porEtiqueta.ADV || []), mMalos = malos.reduce((s, x) => s + x, 0) / malos.length;
+    ok('Orden de calidad: media R > A > D > incompatibles', media('R') > media('A') && media('A') > media('D') && media('D') > mMalos,
+      `R ${media('R').toFixed(1)} · A ${media('A').toFixed(1)} · D ${media('D').toFixed(1)} · I/ADV ${mMalos.toFixed(1)}`);
+    ok('Todo recomendable puntúa por encima de todo incompatible', Math.min(...porEtiqueta.R) > Math.max(...malos), `mín. R ${Math.min(...porEtiqueta.R)} · máx. I/ADV ${Math.max(...malos)}`);
+    // Caso 19 del informe: cinturón negro con zapato marrón. La app elige el cinturón: nunca negro con derby
+    ok('Informe caso 19: nunca cinturón negro con derby marrón', inv.filter(p => p.hueco === 'pantalon').every(pt => inv.filter(p => p.tipo === 'derby').every(z => cinturonPara(z, pt) !== CINTURONES.negro)));
+
+    // 2. Fallos reales de Eric (21-10-2026)
+    const e1 = evaluar(o6('polo-verde', 'jer-gris', 'caz-beige', 'ch-marino', 'zap-derby-cognac', 'calc-negro'), M);
+    ok('Eric 1: polo oliva + jersey gris + cazadora beige + chino marino → «No pega»', e1.nota < 65, `${e1.nota} · ${e1.notas.filter(n => n.ajuste < 0).slice(0, 3).map(n => n.texto).join(' / ')}`);
+    const e2 = evaluar(o6('polo-verde', 'u-merino-marron', 'caz-beige', 'ch-marino', 'zap-derby-cognac', 'calc-negro'), M);
+    ok('Eric 2: polo oliva + merino marrón + cazadora beige + chino marino → «No pega»', e2.nota < 65, `${e2.nota} · ${e2.notas.filter(n => n.ajuste < 0).slice(0, 3).map(n => n.texto).join(' / ')}`);
+    const e3 = evaluar(o6('polo-verde', null, null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro'), M);
+    ok('Eric 3 (foto): polo oliva + chino marino + derby oscuro → «Pega con matices» o menos (plano)', e3.nota < 80, `${e3.nota} · ${e3.veredicto}`);
+
+    // 3. Requisitos de la V1 (outfits del inventario y malos del enunciado)
     for (const t of OUTFITS_PROBADOS) {
       const e = evaluar(t.o, M);
       ok(`Probado ${t.n} ${t.nombre}: ≥80 y «Pega»`, e.nota >= 80 && e.veredicto === 'Pega', `${e.nota} · ${e.veredicto} · ${e.ocasion}`);
     }
-    const malos = [
+    const malosV1 = [
       ['a', 'polo-verde', 'u-merino-rojo', null, 'ch-gris', 'u740', 'calc-gris'],
       ['b', 'polo-negro', null, null, 'ch-marino', 'u740', 'calc-negro'],
       ['c', 'polo-marino', null, null, 'ch-marino', 'u740', 'calc-negro'],
@@ -1122,50 +1407,50 @@ function runTests(silencioso) {
       ['e', 'z-tostado', null, null, 'ch-negro', 'zap-derby-cognac', 'calc-negro'],
       ['f', 'z-marron', null, null, 'ch-beige', 'zap-derby-oscuro', 'calc-blanco']
     ];
-    for (const m of malos) {
-      const o = { base: m[1], capa: m[2], exterior: m[3], pantalon: m[4], calzado: m[5], calcetin: m[6] };
-      const e = evaluar(o, M);
+    for (const m of malosV1) {
+      const e = evaluar(o6(m[1], m[2], m[3], m[4], m[5], m[6]), M);
       ok(`Malo ${m[0]}) ${m.slice(1).filter(Boolean).join(' + ')}: <65 y «No pega»`, e.nota < 65 && e.veredicto === 'No pega', `${e.nota} · ${e.veredicto}`);
     }
-    // Caso real (21-10-2026): todo oscuro, correcto pero plano
-    const plano = evaluar({ base: 'polo-verde', pantalon: 'ch-marino', calzado: 'zap-derby-oscuro', calcetin: 'calc-negro' }, M);
-    ok('Polo verde oliva + chino marino + derby oscuro: «No pega» (todo oscuro, verde y marino juntos)', plano.veredicto === 'No pega' && plano.reglas.length > 0, `${plano.nota} · ${plano.reglas.join(' / ')}`);
-    // Caso real (21-10-2026): la propuesta de 4 colores que no se hablan
-    const batiburrillo = evaluar({ base: 'polo-verde', capa: 'jer-gris', exterior: 'caz-beige', pantalon: 'ch-marino', calzado: 'zap-derby-cognac', calcetin: 'calc-negro' }, M);
-    ok('Polo oliva + jersey gris + cazadora beige + chino marino: «No pega»', batiburrillo.nota < 65, `${batiburrillo.nota} · ${batiburrillo.veredicto}`);
-    // Ninguna propuesta de HOY lleva más de 3 colores en la ropa
-    let maxColores = 0;
+
+    // 4. Generación: cero violaciones de reglas obligatorias y propuestas con estilo alto
+    let violaciones = 0, minTop = 100, total = 0;
     for (const ts of [6, 12, 17, 22]) for (const tipoDia of ['reunion', 'normal', 'casual']) {
-      for (const x of proponer(clonar(INVENTARIO_BASE), { tiempo: { ts, tmax: ts + 6, lluvia: 0 }, tipoDia, mes: 10 }, 3).propuestas) {
-        const ropa = [x.o.base, x.o.capa, x.o.exterior, x.o.pantalon].filter(Boolean).map(id => M[id]);
-        maxColores = Math.max(maxColores, new Set(ropa.map(p => CONFIG.grupos[fam(p)] || fam(p))).size);
-      }
+      const ctx = { tiempo: { ts, tmax: ts + 6, lluvia: 0 }, tipoDia, mes: 10 };
+      const r = proponer(clonar(INVENTARIO_BASE), ctx, 3);
+      total += r.lista.length;
+      violaciones += r.lista.filter(x => x.reglas.length).length;
+      for (const x of r.propuestas) minTop = Math.min(minTop, x.estilo);
     }
-    ok('Las propuestas de HOY no pasan de 3 colores en la ropa', maxColores <= 3, `máximo: ${maxColores}`);
-    // Piezas elegidas: mandan, y el resto se ajusta sin cambios innecesarios
+    ok('Ninguna combinación propuesta incumple una regla obligatoria', violaciones === 0, `${total} combinaciones en 12 escenarios`);
+    ok('Las 3 propuestas de HOY tienen estilo ≥ 80 en todos los escenarios', minTop >= 80, `mínimo: ${minTop}`);
+    const rr = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 12, tmax: 20, lluvia: 0 }, tipoDia: 'reunion', mes: 10 }, 3);
+    ok('Reunión: ni zapatillas, ni vaqueros, ni camiseta sola', rr.lista.length > 0 && rr.lista.every(x => !['mr530', 'u740', 'vans'].includes(x.o.calzado) && x.o.pantalon !== 'vaqueros' && !(M[x.o.base].tipo === 'camiseta' && !x.o.capa)));
+    const rn = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 17, tmax: 22, lluvia: 0 }, tipoDia: 'normal', mes: 10 }, 3);
+    ok('Día normal: sin Vans ni camiseta sola', rn.lista.every(x => x.o.calzado !== 'vans' && !(M[x.o.base].tipo === 'camiseta' && !x.o.capa)));
+
+    // 5. Piezas elegidas: mandan, y el resto se ajusta sin cambios innecesarios
     const ctxF = { tiempo: { ts: 13, tmax: 20, lluvia: 0 }, tipoDia: 'normal', mes: 10 };
     const listaF = generar(clonar(INVENTARIO_BASE), ctxF);
-    const actualF = listaF[0].o;
-    const conBeige = mejorConFijas(listaF, { pantalon: 'ch-beige' }, actualF);
+    const conBeige = mejorConFijas(listaF, { pantalon: 'ch-beige' }, listaF[0].o);
     const maxBeige = Math.max(...listaF.filter(x => x.o.pantalon === 'ch-beige').map(x => x.nota));
     ok('Al elegir un pantalón, el resto se ajusta a él', conBeige && conBeige.o.pantalon === 'ch-beige' && conBeige.nota >= maxBeige - CONFIG.cambioMinimo, conBeige ? `${conBeige.nota} (máx. ${maxBeige})` : 'sin resultado');
     const altsF = alternativasHueco(listaF, 'calzado', { pantalon: 'ch-beige' }, conBeige.o);
     ok('Las alternativas de otro hueco respetan lo elegido y van ordenadas', altsF.length > 0 && altsF.every(a => a.r.o.pantalon === 'ch-beige') && altsF.every((a, j) => j === 0 || altsF[j - 1].r.nota >= a.r.nota), altsF.map(a => `${a.id} ${a.r.nota}`).join(' · '));
-    // Caso real (21-10-2026): eliges el polo oliva y el resto tiene que adaptarse cumpliendo las reglas
     const ctx8 = { tiempo: { ts: 8, tmax: 19, lluvia: 0 }, tipoDia: 'normal', mes: 10 };
     const lista8 = generar(clonar(INVENTARIO_BASE), ctx8);
-    const actual8 = { base: 'camisa-celeste', capa: 'u-merino-marron', exterior: 'caz-beige', pantalon: 'ch-marino', calzado: 'zap-derby-cognac', calcetin: 'calc-negro' };
-    const oliva8 = mejorConFijas(lista8, { base: 'polo-verde' }, actual8);
-    const motivo8 = motivoDescarte(generar(clonar(INVENTARIO_BASE), ctx8, { incluirInvalidas: true }), 'base', 'polo-verde', {});
-    ok('A 8 °C el polo oliva queda descartado (ningún jersey contrasta con él) y se explica por qué', !oliva8 && motivo8 && motivo8.motivo, motivo8 ? motivo8.motivo : '');
-    const ctx17 = { tiempo: { ts: 17, tmax: 22, lluvia: 0 }, tipoDia: 'normal', mes: 10 };
-    const lista17 = generar(clonar(INVENTARIO_BASE), ctx17);
-    const actual17 = { base: 'z-celeste', capa: null, exterior: 'caz-beige', pantalon: 'ch-marino', calzado: 'zap-derby-cognac', calcetin: 'calc-negro' };
-    const oliva17 = mejorConFijas(lista17, { base: 'polo-verde' }, actual17);
-    ok('A 17 °C, al elegir el polo oliva el resto se adapta y cumple todas las reglas', oliva17 && oliva17.o.base === 'polo-verde' && !oliva17.reglas.length && oliva17.o.pantalon !== 'ch-marino',
-      oliva17 ? `${oliva17.nota}: ${Object.values(oliva17.o).filter(Boolean).join(' + ')}` : 'ninguna');
-    ok('Ninguna combinación propuesta incumple una regla imprescindible', lista8.every(x => !x.reglas.length), `${lista8.length} combinaciones válidas a 8 °C`);
-    // No disponible nunca aparece en HOY (varios tiempos y tipos de día)
+    const oliva8 = mejorConFijas(lista8, { base: 'polo-verde' }, lista8[0].o);
+    const props8 = proponer(clonar(INVENTARIO_BASE), ctx8, 3).propuestas;
+    ok('A 8 °C el polo oliva no sale bajo un jersey en las propuestas, y si lo eliges cumple las reglas',
+      !props8.some(x => x.o.base === 'polo-verde') && (!oliva8 || !oliva8.reglas.length),
+      oliva8 ? `si lo eliges: ${oliva8.nota} · ${Object.values(oliva8.o).filter(Boolean).join(' + ')}` : 'descartado');
+
+    // 6. «No me convence»: aprende sin saltarse las reglas
+    const top = rn.propuestas[0];
+    const gustos = { no: [{ clave: claveSinCalcetin(top.o), par: arribaDe(top.o) + '|' + top.o.pantalon }] };
+    const rg = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 17, tmax: 22, lluvia: 0 }, tipoDia: 'normal', mes: 10, gustos }, 3);
+    ok('«No me convence» saca ese outfit de las propuestas', !rg.propuestas.some(x => claveSinCalcetin(x.o) === claveSinCalcetin(top.o)), top.o.base + ' + ' + top.o.pantalon);
+
+    // 7. Disponibilidad, tiempo y variedad
     const inv2 = clonar(INVENTARIO_BASE); inv2.find(p => p.id === 'z-celeste').disponible = false; inv2.find(p => p.id === 'ch-gris').disponible = false;
     let aparece = false, vacias = 0;
     for (const ts of [6, 12, 17, 22]) for (const tipoDia of ['reunion', 'normal', 'casual']) {
@@ -1174,17 +1459,10 @@ function runTests(silencioso) {
       for (const x of r.lista) if (Object.values(x.o).some(id => id === 'z-celeste' || id === 'ch-gris')) aparece = true;
     }
     ok('Una prenda no disponible nunca aparece en HOY', !aparece && vacias === 0, aparece ? 'apareció' : (vacias ? `${vacias} escenarios sin propuestas` : 'z-celeste y ch-gris fuera en 12 escenarios'));
-    // 8 °C al salir: capa + exterior y aviso de abrigo
     const r8 = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 8, tmax: 17, lluvia: 0 }, tipoDia: 'normal', mes: 10 }, 3);
     ok('Con 8 °C al salir: todas con capa y exterior', r8.propuestas.length === 3 && r8.propuestas.every(x => x.o.capa && x.o.exterior), r8.propuestas.map(x => `${x.o.capa}+${x.o.exterior}`).join(' · '));
     ok('Con 8 °C al salir: aviso de abrigo de invierno', r8.abrigo === true);
-    // Variedad
-    const rv = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 17, tmax: 22, lluvia: 0 }, tipoDia: 'normal', mes: 10 }, 3);
-    ok('Las 3 propuestas difieren en la prenda de arriba', new Set(rv.propuestas.map(x => arribaDe(x.o))).size === 3 && new Set(rv.propuestas.map(x => x.o.base)).size === 3, rv.propuestas.map(x => [x.o.base, x.o.capa].filter(Boolean).join('+')).join(' · '));
-    // Reunión: solo business casual
-    const rr = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 12, tmax: 20, lluvia: 0 }, tipoDia: 'reunion', mes: 10 }, 3);
-    ok('Reunión: solo business casual', rr.lista.length > 0 && rr.lista.every(x => x.ocasion === 'Business casual'));
-    // Videollamada: F ≥ 3
+    ok('Las 3 propuestas difieren en la prenda de arriba', new Set(rn.propuestas.map(x => arribaDe(x.o))).size === 3 && new Set(rn.propuestas.map(x => x.o.base)).size === 3, rn.propuestas.map(x => [x.o.base, x.o.capa].filter(Boolean).join('+')).join(' · '));
     const inv3 = clonar(INVENTARIO_BASE), M3 = mapa(inv3);
     const vc = proponerVideollamada(inv3, { mes: 10 }, 3);
     ok('Videollamada: parte de arriba con F ≥ 3', vc.length === 3 && vc.every(x => M3[x.o.base].formalidad >= 3 && (!x.o.capa || M3[x.o.capa].formalidad >= 3)));
@@ -1227,7 +1505,7 @@ function fechaCorta(iso) { return new Intl.DateTimeFormat('es-ES', { day: 'numer
 /* ---------- Estado ---------- */
 function estadoNuevo() {
   return { v: 1, prendas: clonar(INVENTARIO_BASE), usos: [], favoritos: [], ajustes: clonar(AJUSTES_BASE),
-    tiempo: null, tiempoManual: {}, onboarded: false, confirmados: {}, oficinaForzada: {}, probador: clonar(OUTFITS_PROBADOS[1].o), datosV: DATOS_V };
+    tiempo: null, tiempoManual: {}, onboarded: false, confirmados: {}, oficinaForzada: {}, probador: clonar(OUTFITS_PROBADOS[1].o), datosV: DATOS_V, gustos: { no: [] } };
 }
 function normalizarPrenda(p) { return Object.assign(P(p.id, p.nombre, p.hueco, p.tipo, p.familia, p.hex, p.formalidad, p.abrigo), p); }
 function migrar(s) {
@@ -1238,6 +1516,7 @@ function migrar(s) {
   r.usos = Array.isArray(s.usos) ? s.usos : []; r.favoritos = Array.isArray(s.favoritos) ? s.favoritos : [];
   r.tiempoManual = s.tiempoManual || {}; r.oficinaForzada = s.oficinaForzada || {}; r.confirmados = s.confirmados || {};
   r.datosV = s.datosV || 1;
+  r.gustos = s.gustos && Array.isArray(s.gustos.no) ? s.gustos : { no: [] };
   return corregirDatos(r);
 }
 // Aplica CORRECCIONES pendientes a un estado guardado (prendas, historial, favoritos y probador)
@@ -1373,12 +1652,12 @@ if (params.has('hoy')) { UI.vista = 'hoy'; UI.dia = 0; }
 
 function fechaVista() { return sumarDias(hoyISO(), UI.dia); }
 function esOficina(fecha) { return !!S.oficinaForzada[fecha] || S.ajustes.dias.includes(diaSemana(fecha)); }
-function ctxPara(fecha, tipoDia) { return { tiempo: tiempoPara(fecha), umbrales: S.ajustes.umbrales, mes: mesDe(fecha), hoy: fecha, usos: S.usos, tipoDia }; }
+function ctxPara(fecha, tipoDia) { return { tiempo: tiempoPara(fecha), umbrales: S.ajustes.umbrales, mes: mesDe(fecha), hoy: fecha, usos: S.usos, tipoDia: UI.video ? null : tipoDia, gustos: S.gustos }; }
 function claveCache(fecha) {
   const t = tiempoPara(fecha);
   return [fecha, UI.tipoDia, UI.video ? 'v' : 'o', t ? [Math.round(t.ts), Math.round(t.tmax), t.lluvia].join('/') : '-',
     S.prendas.filter(p => p.disponible && !p.archivada).map(p => p.id + p.formalidad + p.familia + p.hex).join(','),
-    S.usos.filter(u => u.fecha < fecha).length, JSON.stringify(S.ajustes.umbrales)].join('|');
+    S.usos.filter(u => u.fecha < fecha).length, JSON.stringify(S.ajustes.umbrales), S.gustos.no.length].join('|');
 }
 function asegurarPropuestas() {
   const fecha = fechaVista(), k = claveCache(fecha);
@@ -1542,11 +1821,13 @@ function tarjeta(c, i, Mp, ctx, usoHoy) {
   return `<article class="card prop">
     <div class="prop-top"><div>${figura(c.o, Mp)}</div>
       <div class="score"><span class="title">Propuesta ${i + 1}</span><div class="num">${c.nota}<small>/100</small></div>
-        <div class="row"><span class="pill ${vClase(veredicto)}">${veredicto}</span>${c.ocasion && !UI.video ? `<span class="pill occ">${esc(c.ocasion)}</span>` : ''}</div></div></div>
+        <div class="row"><span class="pill ${vClase(veredicto)}">${veredicto}</span>${c.ocasion && !UI.video ? `<span class="pill occ">${esc(c.ocasion)}</span>` : ''}</div>
+        ${!UI.video && c.estilo != null ? `<div class="subnotas"><span>Estilo <b>${c.estilo}</b></span><span>Contexto <b>${c.contexto}</b></span></div>` : ''}</div></div>
     <ul class="pieces">${piezas}</ul>${avisoFijas}
     <p class="frase">${esc(frase)}</p>
     <div class="actions">${puesto ? `<button class="btn" type="button" data-act="deshacer-uso">Puesto ✓ · Deshacer</button>` : `<button class="btn primary" type="button" data-act="melopongo" data-i="${i}">Me lo pongo</button>`}
       <button class="btn" type="button" data-act="otra" data-i="${i}">Otra propuesta</button></div>
+    ${UI.video ? '' : `<button class="linkbtn nomeconvence" type="button" data-act="nomeconvence" data-i="${i}">No me convence</button>`}
   </article>`;
 }
 function favoritosHoy(fecha, Mp, cache) {
@@ -1583,6 +1864,11 @@ function hojaPieza(i, h) {
     }
     return { id: x, motivo };
   });
+  const V = CFG.veredicto;
+  const altsBuenas = alts.filter(a => a.r.nota >= V.pega), altsMatices = alts.filter(a => a.r.nota >= V.matices && a.r.nota < V.pega), altsFlojas = alts.filter(a => a.r.nota < V.matices);
+  const motivoDe = a => (a.r.notas.find(n => n.ajuste < 0 && n.regla !== 'tope') || {}).texto || 'Queda flojo con el resto';
+  const filaFloja = (a, cls) => { const q = a.id ? Mp[a.id] : null, actual = a.id === (id || null);
+    return `<button class="alt ${cls}${actual ? ' cur' : ''}" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${a.id || ''}">${dotHTML(q)}<span class="alt-txt"><span>${esc(q ? q.nombre : hueco.sin)}${actual ? ' <span class="muted small">· actual</span>' : ''}</span><span class="small alt-sub motivo">${esc(motivoDe(a))}</span></span><span class="pill ${vClase(a.r.veredicto)}">${a.r.nota}</span></button>`; };
   const nOtras = Object.keys(fijas).length;
   const subt = nOtras ? `ordenadas según cómo quedan con ${nOtras === 1 ? 'la pieza que has elegido' : `las ${nOtras} piezas que has elegido`}` : 'ordenadas según cómo queda el outfit completo';
   return `<div class="sheet-head"><div><div class="eyebrow">${esc(hueco.label)}${elegida ? ' · elegida por ti' : ''}</div><h2>${esc(p.nombre)}</h2></div><button class="btn sm ghost" type="button" data-act="cerrar">Cerrar</button></div>
@@ -1590,12 +1876,14 @@ function hojaPieza(i, h) {
       <label class="switch"><input type="checkbox" data-chg="disp-hoy" data-id="${esc(id)}" ${p.disponible ? 'checked' : ''} aria-label="Disponible"><span class="track"></span></label></div>
       ${elegida ? `<div class="switch-row"><div class="small muted">La has elegido tú: el resto se ajusta a ella.</div><button class="btn sm" type="button" data-act="soltar" data-i="${i}" data-h="${h}">Soltar</button></div>` : `<div class="switch-row"><div class="small muted">Me la quedo y que el resto se ajuste a ella.</div><button class="btn sm" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${esc(id || '')}">Elegir</button></div>`}</div>
     <h3>Cambiar por… <span class="muted small">(${subt})</span></h3>
-    <div class="stack">${alts.length ? alts.map(a => {
+    <div class="stack">${altsBuenas.length ? altsBuenas.map(a => {
       const q = a.id ? Mp[a.id] : null, actual = a.id === (id || null);
       const tambien = a.cambia.length ? `<span class="small muted alt-sub">También cambia: ${esc(a.cambia.map(k => a.r.o[k] ? Mp[a.r.o[k]].nombre : HUECOS.find(x => x.k === k).sin).join(' · '))}</span>` : '';
       return `<button class="alt${actual ? ' cur' : ''}" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${a.id || ''}">${dotHTML(q)}<span class="alt-txt"><span>${esc(q ? q.nombre : hueco.sin)}${actual ? ' <span class="muted small">· actual</span>' : ''}</span>${tambien}</span><span class="pill ${vClase(a.r.veredicto)}">${a.r.nota}</span></button>`;
-    }).join('') : '<p class="muted">No hay alternativas que encajen con el tiempo, el tipo de día y lo que has elegido.</p>'}</div>
-    ${descartadas.length ? `<h3>Descartadas <span class="muted small">(rompen alguna regla con lo que has elegido o con el tiempo)</span></h3>
+    }).join('') : '<p class="muted">Ninguna alternativa llega a «Pega» con el tiempo, el tipo de día y lo que has elegido.</p>'}</div>
+    ${altsMatices.length ? `<h3>Con matices <span class="muted small">(valen, pero con un pero)</span></h3><div class="stack">${altsMatices.map(a => filaFloja(a, 'matiz')).join('')}</div>` : ''}
+    ${altsFlojas.length ? `<h3>No recomendables <span class="muted small">(cumplen las reglas, pero el outfit queda flojo)</span></h3><div class="stack">${altsFlojas.map(a => filaFloja(a, 'meh')).join('')}</div>` : ''}
+    ${descartadas.length ? `<h3>Descartadas <span class="muted small">(rompen una regla obligatoria, el tiempo o el tipo de día)</span></h3>
     <div class="stack">${descartadas.map(d => { const q = d.id ? Mp[d.id] : null;
       return `<button class="alt off" type="button" data-act="descartada" data-motivo="${esc(d.motivo)}">${dotHTML(q)}<span class="alt-txt"><span>${esc(q ? q.nombre : hueco.sin)}</span><span class="small alt-sub">${esc(d.motivo)}</span></span><span class="pill bad">✕</span></button>`; }).join('')}</div>` : ''}`;
 }
@@ -1628,7 +1916,7 @@ function vistaProbador() {
   }
   if (completo) { const e2 = evaluar(o, Mp); h += `<div class="sticky-score" aria-hidden="true"><span><b>${e2.nota}</b><span class="muted small">/100</span></span><span class="row"><span class="pill ${vClase(e2.veredicto)}">${e2.veredicto}</span><button class="btn sm ghost" type="button" data-act="arriba">Ver detalle</button></span></div>`; }
   // Cada opción se ordena por la nota que tendría el outfit con ella y con el resto de lo que has elegido
-  if (completo) h += `<p class="small muted">En cada fila, primero lo que mejor queda con el resto de lo que has elegido; el número es la nota que tendría el outfit. Lo tachado rompería una regla.</p>`;
+  if (completo) h += `<p class="small muted">En cada fila, primero lo que mejor queda con el resto de lo que has elegido; el número es la nota que tendría el outfit. En gris, lo que lo dejaría flojo; tachado, lo que rompería una regla obligatoria.</p>`;
   for (const hu of HUECOS) {
     let lista = S.prendas.filter(p => p.hueco === hu.k && !p.archivada).map(p => ({ p, id: p.id }));
     if (hu.opcional) lista.unshift({ p: null, id: null });
@@ -1642,7 +1930,7 @@ function vistaProbador() {
       ${lista.map(x => {
         const sel = (o[hu.k] || null) === x.id;
         const badge = x.nota == null ? '' : x.regla || x.n ? '<span class="chip-n bad">✕</span>' : `<span class="chip-n ${vClase(x.nota >= CFG.veredicto.pega ? 'Pega' : x.nota >= CFG.veredicto.matices ? 'Pega con matices' : 'No pega')}">${x.nota}</span>`;
-        const veto = x.regla && !sel ? ' veto' : '', tit = x.regla ? ` title="${esc(x.regla)}"` : '';
+        const veto = x.regla && !sel ? ' veto' : (!sel && x.nota != null && x.nota < CFG.veredicto.matices ? ' meh' : ''), tit = x.regla ? ` title="${esc(x.regla)}"` : '';
         if (!x.p) return `<button type="button" class="chip none${veto}" data-act="elegir" data-h="${hu.k}" data-id="" aria-pressed="${sel}"${tit}><span class="dot"></span>${esc(hu.sin)}${badge}</button>`;
         return `<button type="button" class="chip${x.p.disponible ? '' : ' off'}${veto}" data-act="elegir" data-h="${hu.k}" data-id="${esc(x.id)}" aria-pressed="${sel}"${tit}>${dotHTML(x.p)}<span>${esc(x.p.nombre)}${x.p.disponible ? '' : ' · no disp.'}</span>${badge}</button>`;
       }).join('')}
@@ -1689,8 +1977,8 @@ function filaPrenda(p) {
   </div>`;
 }
 function familiasConocidas() {
-  const s = new Set(CONFIG.neutros);
-  CONFIG.colores.pares.forEach(p => { s.add(p.a); s.add(p.b); });
+  const s = new Set(['negro', 'blanco', 'gris', 'beige', 'marino', 'vaquero', 'marrón']);
+  CONFIG.pares.forEach(p => { s.add(p.a); s.add(p.b); });
   S.prendas.forEach(p => s.add(fam(p)));
   ['rosa apagado', 'cognac', 'marrón oscuro', 'rojo'].forEach(x => s.add(x));
   return [...s].sort();
@@ -1791,6 +2079,10 @@ function vistaAjustes() {
     <button class="btn" type="button" data-act="copiar-url">Copiar dirección</button>
     <div class="notice warn small">Atajos abre la dirección en Safari, y en iPhone la app de la pantalla de inicio guarda sus datos aparte de Safari. En esa pestaña verás el armario base, sin tus disponibilidades ni tu historial. Úsalo como recordatorio y abre el icono de la app para elegir.</div>
   </section>
+  <section class="card"><h2>Lo que he aprendido de ti</h2>
+    <p class="small muted">${S.gustos.no.length ? `${S.gustos.no.length} outfit${S.gustos.no.length === 1 ? '' : 's'} marcado${S.gustos.no.length === 1 ? '' : 's'} como «No me convence». Bajan de nota y no se vuelven a proponer; la combinación de arriba y pantalón también baja un poco. Nunca se saltan las reglas.` : 'Cuando una propuesta no te guste, pulsa «No me convence» y la app aprende de ti.'}</p>
+    ${S.gustos.no.length ? '<button class="btn danger block" type="button" data-act="borrar-gustos">Olvidar lo aprendido</button>' : ''}
+  </section>
   <section class="card"><h2>Asistente</h2><button class="btn" type="button" data-act="asistente">Repetir el asistente inicial</button></section>
   <section class="card"><button class="btn ghost block" type="button" data-act="version" style="justify-content:space-between"><span>Qué me pongo</span><span class="mono">${VERSION}</span></button>
     <ul class="small muted" style="margin:0;padding-left:18px">${cambios.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
@@ -1890,6 +2182,17 @@ const ACT = {
   'soltar-todo'(el) { const fk = claveFijas(); if (UI.fijas[fk]) UI.fijas[fk][+el.dataset.i] = {}; render(); toast('Piezas soltadas: la app vuelve a elegir libremente'); },
   melopongo(el) { const c = UI.cards[+el.dataset.i]; registrarUso(c.o, UI.video ? 'videollamada' : UI.tipoDia); },
   'deshacer-uso'() { const f = fechaVista(); S.usos = S.usos.filter(u => u.fecha !== f); guardar(); render(); },
+  nomeconvence(el) {
+    const i = +el.dataset.i, c = UI.cards[i];
+    const reg = { clave: claveSinCalcetin(c.o), par: arribaDe(c.o) + '|' + c.o.pantalon, fecha: hoyISO() };
+    S.gustos.no.push(reg); if (S.gustos.no.length > 300) S.gustos.no.shift();
+    guardar(); UI.cache = null; render();
+    toast('Anotado: no te lo volveré a proponer', 'Deshacer', () => { S.gustos.no = S.gustos.no.filter(x => x !== reg); guardar(); UI.cache = null; render(); });
+  },
+  'borrar-gustos'() {
+    if (!confirm('Se olvidan todos los «No me convence». ¿Seguro?')) return;
+    S.gustos.no = []; guardar(); UI.cache = null; render(); toast('Gustos olvidados');
+  },
   otra(el) {
     const i = +el.dataset.i;
     const otras = UI.cards.filter((_, j) => j !== i);

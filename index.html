@@ -281,8 +281,11 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V3.0';
+const VERSION = 'V3.1';
 const CAMBIOS = {
+  'V3.1': [
+    'Día «Normal»: las Vans y la camiseta sin jersey ya están permitidas. Solo bajan un poco el Contexto si el resto es más formal.'
+  ],
   'V3.0': [
     'Motor rehecho con los dos informes del proyecto: el outfit se juzga entero (variedad de colores según la superficie, un solo foco saturado, oscuros casi iguales, regla de los tres tonos con cazadora).',
     'El color se mide de verdad (luminosidad y saturación OKLCH), no por el nombre. Las reglas de color pasan a ser suaves y condicionadas: oliva con marino vale si hay un claro; vaquero con marino ya no se prohíbe.',
@@ -512,10 +515,10 @@ const CONFIG = {
   // Cada tipo de día fija un objetivo y un mínimo de formalidad. Mínimo y prohibiciones: obligatorios.
   tipoDia: {
     reunion: { nombre: 'Reunión', objetivo: 4.2, minimo: 3, camisetaSola: false },
-    normal: { nombre: 'Normal', objetivo: 3.7, minimo: 2, camisetaSola: false },
+    normal: { nombre: 'Normal', objetivo: 3.7, minimo: 1, camisetaSola: true },   // Eric: Vans y camiseta sola valen en la oficina
     casual: { nombre: 'Casual', objetivo: 3.0, minimo: 1, camisetaSola: true }
   },
-  ajusteFormalidad: { tolerancia: 0.4, porPunto: -10, bajo: 1.5, ajusteBajo: -8 },
+  ajusteFormalidad: { tolerancia: 0.4, porPunto: -10, bajo: 1.5, ajusteBajo: -4 },
   lluvia: {
     penaliza: { 'vans': [-8, 'Lluvia: la lona de las Vans se empapa'], 'zap-derby-cognac': [-6, 'Lluvia: el aspecto ante se mancha con el agua'], 'zap-derby-oscuro': [-6, 'Lluvia: el aspecto ante se mancha con el agua'] },
     favorece: { 'u-harrington': [3, 'Lluvia: el harrington aguanta la llovizna'] }
@@ -1335,7 +1338,7 @@ const CASOS_INFORME = [
   [9, 'R', 'polo-verde', null, null, 'ch-beige', 'zap-derby-oscuro', 't-calc-marron', 'normal'],
   [10, 'R', 'camisa-celeste', 'jer-marino', null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'reunion'],
   [11, 'A', 'polo-marino', null, null, 'ch-beige', 'mr530', null, 'normal'],
-  [12, 'A', 'u-supima', 'jer-negro', null, 'ch-gris', 'u740', 'calc-gris', 'normal'],
+  [12, 'R', 'u-supima', 'jer-negro', null, 'ch-gris', 'u740', 'calc-gris', 'normal'],   // A en el informe por la zapatilla en oficina; Eric la permite
   [13, 'A', 'u-supima', 'u-merino-marron', null, 'ch-negro', 'zap-derby-oscuro', 'calc-negro', 'normal'],
   [14, 'R', 'u-supima', null, 'u-harrington', 'vaqueros', 'mr530', null, 'casual'],
   [15, 'X', 'u-supima', 'jer-marino', null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
@@ -1345,10 +1348,10 @@ const CASOS_INFORME = [
   [20, 'ADV', 'polo-verde', 'u-merino-rojo', null, 'ch-beige', 'zap-derby-oscuro', 't-calc-marron', 'normal'],
   [21, 'D', 'z-tostado', null, null, 'ch-negro', 'zap-derby-cognac', 'calc-negro', 'normal'],
   [22, 'D', 't-polo-gris', 'jer-gris', null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris', 'normal'],
-  [23, 'A', 'u-supima', 'u-merino-rojo', null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],
+  [23, 'R', 'u-supima', 'u-merino-rojo', null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],   // A en el informe en parte por la camiseta bajo jersey en oficina; Eric la permite
   [24, 'A', 'z-marron', 'u-merino-rojo', null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
   [25, 'R', 'polo-verde', null, 'caz-beige', 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
-  [26, 'I', 'cam-negra', null, null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],
+  [26, 'A', 'cam-negra', null, null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],   // el informe lo vetaba en oficina; Eric lo permite
   [27, 'A', 'polo-negro', null, null, 'vaqueros', 'vans', 'calc-blanco', 'casual'],
   [28, 'D', 'u-supima', 'jer-marino', null, 'ch-negro', 'u740', 'calc-negro', 'normal'],
   [29, 'I', 'camisa-celeste', null, null, 'ch-gris', 'zap-derby-oscuro', 'calc-blanco', 'normal'],
@@ -1426,7 +1429,8 @@ function runTests(silencioso) {
     const rr = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 12, tmax: 20, lluvia: 0 }, tipoDia: 'reunion', mes: 10 }, 3);
     ok('Reunión: ni zapatillas, ni vaqueros, ni camiseta sola', rr.lista.length > 0 && rr.lista.every(x => !['mr530', 'u740', 'vans'].includes(x.o.calzado) && x.o.pantalon !== 'vaqueros' && !(M[x.o.base].tipo === 'camiseta' && !x.o.capa)));
     const rn = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 17, tmax: 22, lluvia: 0 }, tipoDia: 'normal', mes: 10 }, 3);
-    ok('Día normal: sin Vans ni camiseta sola', rn.lista.every(x => x.o.calzado !== 'vans' && !(M[x.o.base].tipo === 'camiseta' && !x.o.capa)));
+    const rnTodas = generar(clonar(INVENTARIO_BASE), { tiempo: { ts: 22, tmax: 26, lluvia: 0 }, tipoDia: 'normal', mes: 10 });
+    ok('Día normal: las Vans y la camiseta sola están permitidas', rnTodas.some(x => x.o.calzado === 'vans') && rnTodas.some(x => M[x.o.base].tipo === 'camiseta' && !x.o.capa));
 
     // 5. Piezas elegidas: mandan, y el resto se ajusta sin cambios innecesarios
     const ctxF = { tiempo: { ts: 13, tmax: 20, lluvia: 0 }, tipoDia: 'normal', mes: 10 };

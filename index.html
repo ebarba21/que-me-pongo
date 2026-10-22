@@ -81,7 +81,7 @@ main.view { max-width: 600px; margin: 0 auto; padding: 14px max(16px, var(--sar)
 
 /* Control segmentado */
 .seg { display: flex; background: var(--paper2); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 3px; }
-.seg button { flex: 1; min-height: 40px; border: 0; background: transparent; border-radius: 9px; font-weight: 600; font-size: .9rem; color: var(--soft); padding: 4px 6px; }
+.seg button { flex: 1; min-height: 44px; border: 0; background: transparent; border-radius: 9px; font-weight: 600; font-size: .9rem; color: var(--soft); padding: 4px 6px; }
 .seg button[aria-pressed="true"] { background: var(--paper); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .seg.wide button { min-height: 44px; }
 
@@ -281,8 +281,12 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V3.1';
+const VERSION = 'V3.2';
 const CAMBIOS = {
+  'V3.2': [
+    'La app conoce el corte del pantalón y el volumen del zapato. Tus chinos son rectos y el derby marrón oscuro es de suela gruesa: pareja equilibrada.',
+    'Regla nueva de proporción: suela gruesa con pantalón estrecho resta; zapato fino con pantalón ancho, también. Se edita en la ficha de cada prenda.'
+  ],
   'V3.1': [
     'Día «Normal»: las Vans y la camiseta sin jersey ya están permitidas. Solo bajan un poco el Contexto si el resto es más formal.'
   ],
@@ -489,6 +493,12 @@ const CONFIG = {
   },
   // COGNAC_FRIO: el cognac mejora con celeste arriba
   cognacCeleste: { ajuste: 2, texto: 'El cognac con celeste arriba: muy buena pareja' },
+  // SUELA_VOLUMEN (Bloque V): corte del pantalón × volumen del calzado; penaliza las diagonales extremas
+  volumen: {
+    estrecho: { robusto: [-8, 'Suela gruesa con pantalón estrecho: el pie queda sobredimensionado; pide chino recto'] },
+    recto: { robusto: [1, 'Suela gruesa con chino recto: proporción equilibrada'] },
+    ancho: { fino: [-4, 'Zapato fino con pantalón ancho: el pie queda pequeño'] }
+  },
   temporadaCalzado: { 'zap-derby-oscuro': { meses: [10, 11, 12, 1, 2, 3], ajuste: -3, texto: 'Derby marrón oscuro: mejor en otoño-invierno' } },
 
   /* ---------- Calcetines (consenso Permanent Style, Gentleman's Gazette, Put This On) ---------- */
@@ -586,7 +596,7 @@ const TIPOS = {
 function P(id, nombre, hueco, tipo, familia, hex, F, A, extra) {
   return Object.assign({
     id, nombre, hueco, tipo, familia, hex, hex2: null, formalidad: F, abrigo: A,
-    manga: null, temporadas: [], material: '', cuidados: '', tienda: '', ref: '',
+    manga: null, corte: null, volumen: null, temporadas: [], material: '', cuidados: '', tienda: '', ref: '',
     disponible: true, archivada: false, fotoId: null, notas: '', llamativo: false, bajoJersey: true, compra: null
   }, extra || {});
 }
@@ -609,16 +619,16 @@ const INVENTARIO_BASE = [
   P('u-merino-marron', 'Jersey merino marrón oscuro', 'capa', 'jersey', 'marrón', '#4a3528', 4, 2, { temporadas: OCT_ABR, material: '100% merino extrafino', cuidados: 'Lavar a 40 °C como máximo · sin secadora', tienda: 'Uniqlo', ref: 'E450535-000 col.38', notas: 'Cuello redondo', compra: '2026-10-21' }),
   P('caz-beige', 'Cazadora beige', 'exterior', 'cazadora', 'beige', '#c9b48f', 3, 2),
   P('u-harrington', 'Harrington azul marino', 'exterior', 'cazadora', 'marino', '#232e44', 3, 2, { material: '50% algodón, 50% poliéster', cuidados: 'Lavar a mano en frío', tienda: 'Uniqlo', ref: 'E484610-000 col.69', notas: 'Corte relax · aguanta llovizna', compra: '2026-10-21' }),
-  P('ch-negro', 'Chinos negros', 'pantalon', 'chino', 'negro', '#1f1f22', 4, 0),
-  P('ch-gris', 'Chinos grises', 'pantalon', 'chino', 'gris', '#8a8d90', 4, 0),
-  P('ch-marino', 'Chinos azul marino', 'pantalon', 'chino', 'marino', '#27324a', 4, 0),
-  P('ch-beige', 'Chinos beige/crema', 'pantalon', 'chino', 'beige', '#dccaa9', 4, 0),
+  P('ch-negro', 'Chinos negros', 'pantalon', 'chino', 'negro', '#1f1f22', 4, 0, { corte: 'recto' }),
+  P('ch-gris', 'Chinos grises', 'pantalon', 'chino', 'gris', '#8a8d90', 4, 0, { corte: 'recto' }),
+  P('ch-marino', 'Chinos azul marino', 'pantalon', 'chino', 'marino', '#27324a', 4, 0, { corte: 'recto' }),
+  P('ch-beige', 'Chinos beige/crema', 'pantalon', 'chino', 'beige', '#dccaa9', 4, 0, { corte: 'recto' }),
   P('vaqueros', 'Vaqueros azules', 'pantalon', 'vaquero', 'vaquero', '#4c6a90', 2, 0),
   P('mr530', 'New Balance MR530 beige', 'calzado', 'zapatilla', 'beige', '#d8ccb5', 2, 0),
   P('u740', 'New Balance U740 blancas/grises', 'calzado', 'zapatilla', 'blanco', '#ebebe8', 2, 0, { hex2: '#a9adb2', notas: 'Zapatilla comodín' }),
   P('vans', 'Vans negras/blancas', 'calzado', 'zapatilla', 'negro', '#1b1b1d', 1, 0, { hex2: '#f4f4f2', material: 'Lona', notas: 'Solo casual' }),
-  P('zap-derby-cognac', 'Derby liso cognac', 'calzado', 'derby', 'cognac', '#75502f', 4, 0, { material: 'Sintético, aspecto ante', tienda: 'Pier One (Zalando)', ref: 'PI912C0GX-O11', notas: 'Suela oscura fina con canto marrón' }),
-  P('zap-derby-oscuro', 'Derby marrón oscuro', 'calzado', 'derby', 'marrón oscuro', '#4a3226', 3, 0, { material: 'Sintético, aspecto ante', tienda: 'Pier One (Zalando)', ref: 'PI915C014-O11', notas: 'Punta mocasín · suela negra dentada gruesa con buen agarre' }),
+  P('zap-derby-cognac', 'Derby liso cognac', 'calzado', 'derby', 'cognac', '#75502f', 4, 0, { material: 'Sintético, aspecto ante', tienda: 'Pier One (Zalando)', ref: 'PI912C0GX-O11', volumen: 'fino', notas: 'Suela oscura fina con canto marrón' }),
+  P('zap-derby-oscuro', 'Derby marrón oscuro', 'calzado', 'derby', 'marrón oscuro', '#4a3226', 3, 0, { material: 'Sintético, aspecto ante', tienda: 'Pier One (Zalando)', ref: 'PI915C014-O11', volumen: 'robusto', notas: 'Punta mocasín · suela negra dentada gruesa con buen agarre' }),
   P('calc-negro', 'Calcetines negros', 'calcetin', 'calcetin', 'negro', '#1b1b1d', null, 0),
   P('calc-gris', 'Calcetines grises', 'calcetin', 'calcetin', 'gris', '#8a8d90', null, 0),
   P('calc-blanco', 'Calcetines blancos', 'calcetin', 'calcetin', 'blanco', '#f2f2f0', null, 0)
@@ -638,7 +648,7 @@ function cinturonPara(calz, pant) {
 const CINTURONES_TEXTO = 'Marrón de ante, ancho, hebilla plateada (Pier One PI952D048-O11) · negro de piel granulada, de vestir (Pier One PI954D01Z-Q11)';
 
 /* Correcciones de datos por versión: se aplican una vez a lo guardado en el iPhone */
-const DATOS_V = 3;
+const DATOS_V = 4;
 const CORRECCIONES = {
   2: {
     renombrar: { 'jer-blancomarino': 'jer-marino' },
@@ -650,7 +660,9 @@ const CORRECCIONES = {
     }
   },
   // V1.2: nueva hora de salida por defecto (solo si seguía la antigua, 07:15)
-  3: { horaAntigua: '07:15' }
+  3: { horaAntigua: '07:15' },
+  // V3.2: corte de los chinos (Eric: todos rectos) y volumen de los derbys
+  4: { campos: { 'ch-negro': ['corte'], 'ch-gris': ['corte'], 'ch-marino': ['corte'], 'ch-beige': ['corte'], 'zap-derby-cognac': ['volumen'], 'zap-derby-oscuro': ['volumen'] } }
 };
 
 /* Apartado 8 · Outfits probados */
@@ -945,6 +957,8 @@ function evaluar(o, M, ctx) {
   for (const r of reglasZap) {
     if (cumple(r.pantalon, pant) && cumple(r.base, base)) { add(r.ajuste, rellenar(r.texto, { pf: fam(pant) }), 'calzado'); break; }
   }
+  const vol = (C.volumen[pant.corte] || {})[calz.volumen];
+  if (vol) add(vol[0], vol[1], 'volumen');
   if (calz.id === 'zap-derby-cognac' && famPar(arriba) === 'azul cielo') add(C.cognacCeleste.ajuste, C.cognacCeleste.texto, 'calzado');
 
   /* 12. Calcetines: acompañan al pantalón */
@@ -1386,6 +1400,17 @@ function runTests(silencioso) {
     ok('Orden de calidad: media R > A > D > incompatibles', media('R') > media('A') && media('A') > media('D') && media('D') > mMalos,
       `R ${media('R').toFixed(1)} · A ${media('A').toFixed(1)} · D ${media('D').toFixed(1)} · I/ADV ${mMalos.toFixed(1)}`);
     ok('Todo recomendable puntúa por encima de todo incompatible', Math.min(...porEtiqueta.R) > Math.max(...malos), `mín. R ${Math.min(...porEtiqueta.R)} · máx. I/ADV ${Math.max(...malos)}`);
+    // SUELA_VOLUMEN: derby de suela gruesa con chino recto vale; con pantalón estrecho resta
+    {
+      const est = Object.assign(clonar(M['ch-marino']), { id: 't-ch-estrecho', corte: 'estrecho' });
+      const Mv = Object.assign({}, M, { 't-ch-estrecho': est });
+      const nv = (pt, z) => evaluar(o6('z-marron', null, null, pt, z, 'calc-negro'), Mv, { tipoDia: 'normal', mes: 10 });
+      const vol = e => e.notas.filter(n => n.regla === 'volumen').reduce((a, n) => a + n.ajuste, 0);
+      const rr = nv('ch-marino', 'zap-derby-oscuro'), re = nv('t-ch-estrecho', 'zap-derby-oscuro'), rc = nv('t-ch-estrecho', 'zap-derby-cognac');
+      ok('Suela gruesa: chino recto suma y pantalón estrecho resta', vol(rr) > 0 && vol(re) <= -8 && re.estilo < rr.estilo, `recto ${vol(rr)} (${rr.estilo}) · estrecho ${vol(re)} (${re.estilo})`);
+      ok('Derby de suela fina: admite pantalón estrecho', vol(rc) === 0, `${vol(rc)}`);
+      ok('Todos los chinos base son rectos', inv.filter(p => p.tipo === 'chino').every(p => p.corte === 'recto'));
+    }
     // Caso 19 del informe: cinturón negro con zapato marrón. La app elige el cinturón: nunca negro con derby
     ok('Informe caso 19: nunca cinturón negro con derby marrón', inv.filter(p => p.hueco === 'pantalon').every(pt => inv.filter(p => p.tipo === 'derby').every(z => cinturonPara(z, pt) !== CINTURONES.negro)));
 
@@ -2011,6 +2036,8 @@ function hojaFicha(p, nueva) {
       <input class="input" type="color" name="hex2" value="${esc(p.hex2 || '#ffffff')}" aria-label="Segundo color"></div></div>
     ${p.hueco === 'calcetin' ? '' : `<div class="field"><span>Formalidad (1 casual · 5 formal)</span><div class="seg" data-seg="formalidad">${[1, 2, 3, 4, 5].map(n => `<button type="button" data-act="seg" data-v="${n}" aria-pressed="${p.formalidad === n}">${n}</button>`).join('')}</div></div>`}
     ${conAbrigo ? `<div class="field"><span>Abrigo (1 ligero · 2 medio · 3 cálido)</span><div class="seg" data-seg="abrigo">${[0, 1, 2, 3].map(n => `<button type="button" data-act="seg" data-v="${n}" aria-pressed="${p.abrigo === n}">${n}</button>`).join('')}</div></div>` : ''}
+    ${p.hueco === 'pantalon' ? `<div class="field"><span>Corte</span><div class="seg" data-seg="corte">${[['estrecho', 'Estrecho'], ['recto', 'Recto'], ['ancho', 'Ancho'], ['', 'No sé']].map(([k, l]) => `<button type="button" data-act="seg" data-v="${k}" aria-pressed="${(p.corte || '') === k}">${l}</button>`).join('')}</div></div>` : ''}
+    ${p.hueco === 'calzado' ? `<div class="field"><span>Volumen del zapato y la suela</span><div class="seg" data-seg="volumen">${[['fino', 'Fino'], ['medio', 'Medio'], ['robusto', 'Robusto'], ['', 'No sé']].map(([k, l]) => `<button type="button" data-act="seg" data-v="${k}" aria-pressed="${(p.volumen || '') === k}">${l}</button>`).join('')}</div></div>` : ''}
     ${p.hueco === 'base' ? `<div class="field"><span>Manga</span><div class="seg" data-seg="manga">${[['corta', 'Corta'], ['larga', 'Larga']].map(([k, l]) => `<button type="button" data-act="seg" data-v="${k}" aria-pressed="${p.manga === k}">${l}</button>`).join('')}</div></div>` : ''}
     <div class="field"><span>Temporada (ninguno marcado = todo el año)</span><div class="months">${MESES.map((m, i) => `<button type="button" data-act="mes" data-m="${i + 1}" aria-pressed="${UI.fichaMeses.includes(i + 1)}" aria-label="Mes ${i + 1}">${m}</button>`).join('')}</div></div>
     <div class="grid2">
@@ -2280,6 +2307,8 @@ async function guardarFicha(form) {
   p.familia = String(fd.get('familia')).trim().toLowerCase(); p.hex = fd.get('hex'); p.hex2 = fd.get('tieneHex2') ? fd.get('hex2') : null;
   const F = segVal('formalidad'); p.formalidad = hueco === 'calcetin' ? null : (F != null ? +F : (p.formalidad != null ? p.formalidad : 3));
   const A = segVal('abrigo'); p.abrigo = ['base', 'capa', 'exterior'].includes(hueco) ? (A != null ? +A : (p.abrigo || 1)) : 0;
+  const ct = segVal('corte'); p.corte = hueco === 'pantalon' ? (ct || null) : null;
+  const vl = segVal('volumen'); p.volumen = hueco === 'calzado' ? (vl || null) : null;
   const mg = segVal('manga'); p.manga = hueco === 'base' ? (mg || p.manga || 'corta') : null;
   p.temporadas = UI.fichaMeses.slice().sort((a, b) => a - b);
   ['material', 'cuidados', 'tienda', 'ref', 'notas'].forEach(k => p[k] = String(fd.get(k) || '').trim());

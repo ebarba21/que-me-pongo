@@ -283,8 +283,11 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V3.3';
+const VERSION = 'V3.4';
 const CAMBIOS = {
+  'V3.4': [
+    '«Adaptar el resto» aparece siempre que hayas elegido alguna pieza. Si ya no hay nada mejor, lo marca con ✓ y al pulsarlo te dice qué limita la nota.'
+  ],
   'V3.3': [
     'Botón «Adaptar el resto» en cada propuesta con piezas elegidas: rehace el outfit entero alrededor de lo que has marcado y enseña la nota a la que llega. «Soltar» sigue igual.',
     'Menos camisa: llevarla ya no suma por sí misma, y las tres propuestas intentan ser de tipos distintos arriba (camisa, polo o camiseta).'
@@ -1889,7 +1892,7 @@ function tarjeta(c, i, Mp, ctx, usoHoy) {
   const adaptado = nFijas ? adaptarAFijas(UI.cache.lista, fijas) : null;
   const puedeAdaptar = adaptado && adaptado.clave !== c.clave && adaptado.nota > c.nota;
   const marcadas = nFijas === 1 ? 'la pieza marcada' : `las ${nFijas} piezas marcadas`;
-  const avisoFijas = nFijas ? `<div class="fijas-info"><span>${puedeAdaptar ? `El resto sigue como estaba. Puede encajar mejor con ${marcadas}.` : `El resto ya es lo mejor para ${marcadas}.`}</span><span class="fijas-btns">${puedeAdaptar ? `<button class="btn sm accent" type="button" data-act="adaptar" data-i="${i}">Adaptar el resto · ${adaptado.nota}</button>` : ''}<button class="linkbtn" type="button" data-act="soltar-todo" data-i="${i}">Soltar</button></span></div>` : '';
+  const avisoFijas = nFijas ? `<div class="fijas-info"><span>${puedeAdaptar ? `El resto sigue como estaba. Puede encajar mejor con ${marcadas}.` : `El resto ya es lo mejor para ${marcadas}.`}</span><span class="fijas-btns">${puedeAdaptar ? `<button class="btn sm accent" type="button" data-act="adaptar" data-i="${i}">Adaptar el resto · ${adaptado.nota}</button>` : `<button class="btn sm" type="button" data-act="adaptar" data-i="${i}">Adaptar el resto ✓</button>`}<button class="linkbtn" type="button" data-act="soltar-todo" data-i="${i}">Soltar</button></span></div>` : '';
   const frase = UI.video ? (c.notas[0] ? c.notas[0].texto + '.' : 'Limpio y correcto para cámara.') + (c.o.capa ? ' Cuello por fuera del jersey.' : '') : fraseEstilista(c.o, Mp, c, ctx);
   const veredicto = c.veredicto || (c.nota >= CFG.veredicto.pega ? 'Pega' : c.nota >= CFG.veredicto.matices ? 'Pega con matices' : 'No pega');
   return `<article class="card prop">
@@ -2215,7 +2218,7 @@ function toast(msg, accion, fn) {
   t.innerHTML = `<span>${esc(msg)}</span>${accion ? `<button type="button" id="toast-btn">${esc(accion)}</button>` : ''}`;
   t.hidden = false;
   if (accion) $('#toast-btn').onclick = () => { t.hidden = true; fn(); };
-  clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, accion ? 6000 : 3000);
+  clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, Math.max(accion ? 6000 : 3000, msg.length * 55));
 }
 
 /* ---------- Acciones ---------- */
@@ -2260,7 +2263,13 @@ const ACT = {
     // Rehace el outfit entero alrededor de las piezas elegidas; las demás pasan a ser sugerencias de la app
     const i = +el.dataset.i, antes = UI.cards[i], fijas = fijasDe(i);
     const r = adaptarAFijas(UI.cache.lista, fijas);
-    if (!r || r.clave === antes.clave || r.nota <= antes.nota) { toast('Ya es el mejor outfit con lo que has elegido'); return; }
+    if (!r || r.clave === antes.clave || r.nota <= antes.nota) {
+      // Ya es lo mejor: explica qué limita la nota (lo que más resta)
+      const malas = (antes.notas || []).filter(n => n.ajuste < 0 && n.regla !== 'tope').sort((a, b) => a.ajuste - b.ajuste).slice(0, 2).map(n => n.texto.toLowerCase());
+      const pz = Object.values(fijas).filter(Boolean).map(id => M()[id].nombre.toLowerCase()).join(' y ');
+      toast(`Ya es lo mejor con ${pz || 'lo que has elegido'} hoy${malas.length ? `. Lo que resta: ${malas.join('; ')}` : ''}`);
+      return;
+    }
     const n = HUECOS.filter(x => (r.o[x.k] || null) !== (antes.o[x.k] || null)).length;
     UI.cards[i] = r; UI.vistos.push(r.clave); render();
     toast(`Outfit adaptado a tu elección: ${n === 1 ? 'cambia 1 pieza' : `cambian ${n} piezas`}`, 'Deshacer', () => { UI.cards[i] = antes; render(); });

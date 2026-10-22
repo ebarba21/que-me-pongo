@@ -131,7 +131,9 @@ main.view { max-width: 600px; margin: 0 auto; padding: 14px max(16px, var(--sar)
 .chip.meh { opacity: .6; }
 .tag-fija { color: var(--accent); font-weight: 700; }
 .piece.fija .pn { font-weight: 600; }
-.fijas-info { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .85rem; color: var(--soft); margin-top: -4px; }
+.fijas-info { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 8px; font-size: .85rem; color: var(--soft); margin-top: -4px; }
+.fijas-info .fijas-btns { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.fijas-info .btn.sm { white-space: nowrap; }
 .alt-txt { display: grid; gap: 2px; min-width: 0; }
 .alt-sub { line-height: 1.3; }
 .chip-n { font-family: var(--f-mono); font-size: .75rem; font-weight: 600; padding: 1px 6px; border-radius: 999px; margin-left: 2px; }
@@ -281,8 +283,12 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V3.2';
+const VERSION = 'V3.3';
 const CAMBIOS = {
+  'V3.3': [
+    'Botón «Adaptar el resto» en cada propuesta con piezas elegidas: rehace el outfit entero alrededor de lo que has marcado y enseña la nota a la que llega. «Soltar» sigue igual.',
+    'Menos camisa: llevarla ya no suma por sí misma, y las tres propuestas intentan ser de tipos distintos arriba (camisa, polo o camiseta).'
+  ],
   'V3.2': [
     'La app conoce el corte del pantalón y el volumen del zapato. Tus chinos son rectos y el derby marrón oscuro es de suela gruesa: pareja equilibrada.',
     'Regla nueva de proporción: suela gruesa con pantalón estrecho resta; zapato fino con pantalón ancho, también. Se edita en la ficha de cada prenda.'
@@ -443,10 +449,10 @@ const CONFIG = {
       funde: 0.12, ajusteFunde: -4, textoFunde: 'Lo que asoma se funde con el jersey',
       tonal: 0.15   // mismo color con diferencia clara de tono (tonal): válido
     },
-    // El cuello del polo bajo el jersey debe tener estructura de camisa
+    // Cuello bajo el jersey. Eric (22-10-2026): le da igual camisa, polo o camiseta; la camisa no suma por ser camisa
     estructura: {
-      camisa: [3, 'Camisa bajo jersey: el business casual clásico'],
-      polo: [1, 'Cuello de piqué sobre el jersey: se sostiene'],
+      camisa: [0, ''],
+      polo: [0, ''],
       poloPunto: [-3, 'El cuello blando del polo de punto se pierde bajo el jersey'],
       camiseta: [0, '']
     }
@@ -556,6 +562,8 @@ const CONFIG = {
 
   // Variedad en HOY: penalización por cada pieza (pantalón, exterior, calzado) repetida entre propuestas
   variedadPenal: 2,
+  // Las 3 propuestas intentan ser de tipos distintos arriba (camisa, polo, camiseta): resta por repetir tipo (solo para ordenar)
+  variedadTipo: 5,
   // Videollamada: formalidad mínima de la parte de arriba
   videollamadaF: 3,
   // Piezas elegidas por el usuario: al completar el resto, una pieza sugerida solo cambia si el outfit gana al menos esto
@@ -1153,7 +1161,7 @@ function generar(prendas, ctx, opciones) {
       const o = { base: b.id, capa: c ? c.id : null, exterior: e ? e.id : null, pantalon: p.id, calzado: z.id, calcetin: s ? s.id : null };
       const ev = evaluar(o, M, ctx);
       if (ev.reglas.length && !opciones.todas && !opciones.incluirInvalidas) continue;
-      res.push({ o, ...ev, clave: claveOutfit(o) });
+      res.push({ o, ...ev, clave: claveOutfit(o), tipoArriba: b.tipo.startsWith('polo') ? 'polo' : b.tipo });
     }
   }
   res.sort(ordenar);
@@ -1167,6 +1175,7 @@ function elegirVariadas(lista, n, excluirClaves, yaElegidas) {
   // Ni la base ni el jersey se repiten entre propuestas: así la parte de arriba siempre cambia.
   const usadas = new Set(); const marcar = o => { usadas.add(o.base); if (o.capa) usadas.add(o.capa); };
   const libre = o => !usadas.has(o.base) && !(o.capa && usadas.has(o.capa));
+
   fijas.forEach(r => marcar(r.o));
   const pool = lista.filter(r => !ex.has(r.clave));
   while (out.length < n) {
@@ -1174,8 +1183,12 @@ function elegirVariadas(lista, n, excluirClaves, yaElegidas) {
     for (const r of pool) {
       if (!libre(r.o)) continue;
       let rep = 0;
-      for (const e of fijas.concat(out)) for (const k of ['pantalon', 'exterior', 'calzado']) if (r.o[k] && r.o[k] === e.o[k]) rep++;
-      const v = r.nota + Math.min(r.bruto || r.nota, 110) / 1000 - rep * CFG.variedadPenal;
+      let mismoTipo = 0;
+      for (const e of fijas.concat(out)) {
+        for (const k of ['pantalon', 'exterior', 'calzado']) if (r.o[k] && r.o[k] === e.o[k]) rep++;
+        if (r.tipoArriba && r.tipoArriba === e.tipoArriba) mismoTipo++;
+      }
+      const v = r.nota + Math.min(r.bruto || r.nota, 110) / 1000 - rep * CFG.variedadPenal - mismoTipo * CFG.variedadTipo;
       if (v > bestV) { bestV = v; best = r; }
     }
     if (!best) break;
@@ -1241,13 +1254,15 @@ function cumpleFijas(o, fijas) {
 // El calcetín no cuenta para la estabilidad: siempre se ajusta al pantalón y al calzado
 function enComun(o, actual) { return actual ? HUECOS.filter(h => h.k !== 'calcetin' && (o[h.k] || null) === (actual[h.k] || null)).length : 0; }
 // lista: combinaciones válidas ordenadas de mejor a peor (generar o proponerVideollamada con n = Infinity)
-function mejorConFijas(lista, fijas, actual) {
+// ventana: margen de nota para conservar piezas (CFG.cambioMinimo); Infinity = cambio mínimo (solo lo que exijan las reglas)
+function mejorConFijas(lista, fijas, actual, ventana) {
+  const margen = ventana == null ? CFG.cambioMinimo : ventana;
   let top = null;
   const cand = [];
   for (const r of lista) {
     if (!cumpleFijas(r.o, fijas)) continue;
-    if (!top) top = r.nota;
-    if (r.nota < top - CFG.cambioMinimo) break;
+    if (top == null) top = r.nota;
+    if (r.nota < top - margen) break;
     cand.push(r);
   }
   if (!cand.length) return null;
@@ -1255,6 +1270,10 @@ function mejorConFijas(lista, fijas, actual) {
   cand.sort((a, b) => enComun(b.o, actual) - enComun(a.o, actual) || b.nota - a.nota || (b.bruto || 0) - (a.bruto || 0));
   return cand[0];
 }
+// «Elegir»: cambia solo esa pieza; las demás se tocan únicamente si una regla obligatoria o el tiempo lo exigen
+function cambioMinimo(lista, fijas, actual) { return mejorConFijas(lista, fijas, actual, Infinity); }
+// «Adaptar el resto»: el mejor outfit con lo elegido, sin intentar conservar las demás piezas
+function adaptarAFijas(lista, fijas) { return mejorConFijas(lista, fijas, null); }
 // Alternativas para un hueco, ordenadas por cómo queda el outfit completo respetando lo elegido
 function alternativasHueco(lista, hueco, fijas, actual) {
   const porId = new Map();
@@ -1265,7 +1284,7 @@ function alternativasHueco(lista, hueco, fijas, actual) {
   }
   const res = [];
   for (const id of porId.keys()) {
-    const r = mejorConFijas(lista, Object.assign({}, fijas, { [hueco]: id }), actual);
+    const r = cambioMinimo(lista, Object.assign({}, fijas, { [hueco]: id }), actual);
     if (r) res.push({ id, r, cambia: HUECOS.filter(h => h.k !== hueco && (r.o[h.k] || null) !== ((actual || {})[h.k] || null)).map(h => h.k) });
   }
   res.sort((a, b) => b.r.nota - a.r.nota || a.cambia.length - b.cambia.length);
@@ -1400,6 +1419,28 @@ function runTests(silencioso) {
     ok('Orden de calidad: media R > A > D > incompatibles', media('R') > media('A') && media('A') > media('D') && media('D') > mMalos,
       `R ${media('R').toFixed(1)} · A ${media('A').toFixed(1)} · D ${media('D').toFixed(1)} · I/ADV ${mMalos.toFixed(1)}`);
     ok('Todo recomendable puntúa por encima de todo incompatible', Math.min(...porEtiqueta.R) > Math.max(...malos), `mín. R ${Math.min(...porEtiqueta.R)} · máx. I/ADV ${Math.max(...malos)}`);
+    // Adaptar el resto y variedad de tipos arriba
+    {
+      const ctxA = { tiempo: { ts: 12, tmax: 19, lluvia: 0 }, tipoDia: 'normal', mes: 10 };
+      const LA = generar(inv, ctxA), f = { base: 'polo-verde' };
+      const conVerde = LA.filter(x => x.o.base === 'polo-verde');
+      const ad = adaptarAFijas(LA, f), cons = mejorConFijas(LA, f, LA.find(x => x.o.base === 'camisa-celeste').o);
+      ok('Adaptar el resto: el mejor outfit con la pieza elegida', ad && ad.o.base === 'polo-verde' && ad.nota === conVerde[0].nota, ad ? `${ad.nota} · ${ad.clave}` : 'sin resultado');
+      const sinCalc = o => claveSinCalcetin(Object.assign({}, o, { base: 'polo-verde' }));
+      const validasVerde = new Set(conVerde.map(x => claveSinCalcetin(x.o)));
+      const ini = LA.find(x => x.o.base !== 'polo-verde' && validasVerde.has(sinCalc(x.o))), sw = cambioMinimo(LA, f, ini.o);
+      const tocadas = sw ? HUECOS.filter(h => h.k !== 'base' && h.k !== 'calcetin' && (sw.o[h.k] || null) !== (ini.o[h.k] || null)).length : -1;
+      ok('Elegir: solo cambia la pieza elegida si el resto cumple las reglas', tocadas === 0, sw ? `${tocadas} piezas más · ${sw.nota}` : 'sin resultado');
+      ok('Adaptar el resto nunca queda por debajo del ajuste conservador', ad && cons && ad.nota >= cons.nota, `${ad && ad.nota} ≥ ${cons && cons.nota}`);
+      let distintos = 0, escenarios = 0, camisas = 0, total = 0;
+      for (const [ts, tmax] of [[4, 13], [8, 16], [12, 19], [15, 22], [19, 25], [23, 29]]) {
+        const pr = proponer(inv, { tiempo: { ts, tmax, lluvia: 0 }, tipoDia: 'normal', mes: 10 }, 3).propuestas; if (!pr.length) continue;
+        escenarios++; if (new Set(pr.map(x => x.tipoArriba)).size >= 2) distintos++;
+        total += pr.length; camisas += pr.filter(x => x.tipoArriba === 'camisa').length;
+      }
+      ok('Día normal: las propuestas mezclan tipos arriba', distintos === escenarios, `${distintos}/${escenarios} escenarios con 2 tipos o más`);
+      ok('Día normal: la camisa no domina (≤ 1 de cada 3 propuestas)', camisas <= total / 3, `${camisas} camisas de ${total}`);
+    }
     // SUELA_VOLUMEN: derby de suela gruesa con chino recto vale; con pantalón estrecho resta
     {
       const est = Object.assign(clonar(M['ch-marino']), { id: 't-ch-estrecho', corte: 'estrecho' });
@@ -1844,7 +1885,11 @@ function tarjeta(c, i, Mp, ctx, usoHoy) {
     const p = Mp[c.o[x.k]], elegida = x.k in fijas;
     return `<li><button class="piece${elegida ? ' fija' : ''}" type="button" data-act="pieza" data-i="${i}" data-h="${x.k}">${dotHTML(p)}<span class="pn">${esc(p.nombre)}</span><span class="ps">${elegida ? '<b class="tag-fija">Elegida</b>' : esc(x.label)}<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></span></button></li>`;
   }).join('');
-  const avisoFijas = nFijas ? `<div class="fijas-info"><span>El resto se ajusta a ${nFijas === 1 ? 'la pieza que has elegido' : `las ${nFijas} piezas que has elegido`}.</span><button class="linkbtn" type="button" data-act="soltar-todo" data-i="${i}">Soltar</button></div>` : '';
+  // «Adaptar el resto»: solo si rehacer el outfit alrededor de lo elegido da otra combinación
+  const adaptado = nFijas ? adaptarAFijas(UI.cache.lista, fijas) : null;
+  const puedeAdaptar = adaptado && adaptado.clave !== c.clave && adaptado.nota > c.nota;
+  const marcadas = nFijas === 1 ? 'la pieza marcada' : `las ${nFijas} piezas marcadas`;
+  const avisoFijas = nFijas ? `<div class="fijas-info"><span>${puedeAdaptar ? `El resto sigue como estaba. Puede encajar mejor con ${marcadas}.` : `El resto ya es lo mejor para ${marcadas}.`}</span><span class="fijas-btns">${puedeAdaptar ? `<button class="btn sm accent" type="button" data-act="adaptar" data-i="${i}">Adaptar el resto · ${adaptado.nota}</button>` : ''}<button class="linkbtn" type="button" data-act="soltar-todo" data-i="${i}">Soltar</button></span></div>` : '';
   const frase = UI.video ? (c.notas[0] ? c.notas[0].texto + '.' : 'Limpio y correcto para cámara.') + (c.o.capa ? ' Cuello por fuera del jersey.' : '') : fraseEstilista(c.o, Mp, c, ctx);
   const veredicto = c.veredicto || (c.nota >= CFG.veredicto.pega ? 'Pega' : c.nota >= CFG.veredicto.matices ? 'Pega con matices' : 'No pega');
   return `<article class="card prop">
@@ -1898,16 +1943,15 @@ function hojaPieza(i, h) {
   const motivoDe = a => (a.r.notas.find(n => n.ajuste < 0 && n.regla !== 'tope') || {}).texto || 'Queda flojo con el resto';
   const filaFloja = (a, cls) => { const q = a.id ? Mp[a.id] : null, actual = a.id === (id || null);
     return `<button class="alt ${cls}${actual ? ' cur' : ''}" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${a.id || ''}">${dotHTML(q)}<span class="alt-txt"><span>${esc(q ? q.nombre : hueco.sin)}${actual ? ' <span class="muted small">· actual</span>' : ''}</span><span class="small alt-sub motivo">${esc(motivoDe(a))}</span></span><span class="pill ${vClase(a.r.veredicto)}">${a.r.nota}</span></button>`; };
-  const nOtras = Object.keys(fijas).length;
-  const subt = nOtras ? `ordenadas según cómo quedan con ${nOtras === 1 ? 'la pieza que has elegido' : `las ${nOtras} piezas que has elegido`}` : 'ordenadas según cómo queda el outfit completo';
+  const subt = 'nota del outfit si cambias solo esta pieza';
   return `<div class="sheet-head"><div><div class="eyebrow">${esc(hueco.label)}${elegida ? ' · elegida por ti' : ''}</div><h2>${esc(p.nombre)}</h2></div><button class="btn sm ghost" type="button" data-act="cerrar">Cerrar</button></div>
     <div class="card"><div class="switch-row"><div><b>Disponible</b><div class="small muted">Desmárcala si está para lavar. Las propuestas se recalculan al momento.</div></div>
       <label class="switch"><input type="checkbox" data-chg="disp-hoy" data-id="${esc(id)}" ${p.disponible ? 'checked' : ''} aria-label="Disponible"><span class="track"></span></label></div>
-      ${elegida ? `<div class="switch-row"><div class="small muted">La has elegido tú: el resto se ajusta a ella.</div><button class="btn sm" type="button" data-act="soltar" data-i="${i}" data-h="${h}">Soltar</button></div>` : `<div class="switch-row"><div class="small muted">Me la quedo y que el resto se ajuste a ella.</div><button class="btn sm" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${esc(id || '')}">Elegir</button></div>`}</div>
+      ${elegida ? `<div class="switch-row"><div class="small muted">La has elegido tú. Con «Adaptar el resto» rehago lo demás a su alrededor.</div><button class="btn sm" type="button" data-act="soltar" data-i="${i}" data-h="${h}">Soltar</button></div>` : `<div class="switch-row"><div class="small muted">Me la quedo pase lo que pase.</div><button class="btn sm" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${esc(id || '')}">Elegir</button></div>`}</div>
     <h3>Cambiar por… <span class="muted small">(${subt})</span></h3>
     <div class="stack">${altsBuenas.length ? altsBuenas.map(a => {
       const q = a.id ? Mp[a.id] : null, actual = a.id === (id || null);
-      const tambien = a.cambia.length ? `<span class="small muted alt-sub">También cambia: ${esc(a.cambia.map(k => a.r.o[k] ? Mp[a.r.o[k]].nombre : HUECOS.find(x => x.k === k).sin).join(' · '))}</span>` : '';
+      const tambien = a.cambia.length ? `<span class="small muted alt-sub">Para cumplir las reglas, también cambia: ${esc(a.cambia.map(k => a.r.o[k] ? Mp[a.r.o[k]].nombre : HUECOS.find(x => x.k === k).sin).join(' · '))}</span>` : '';
       return `<button class="alt${actual ? ' cur' : ''}" type="button" data-act="cambiar" data-i="${i}" data-h="${h}" data-id="${a.id || ''}">${dotHTML(q)}<span class="alt-txt"><span>${esc(q ? q.nombre : hueco.sin)}${actual ? ' <span class="muted small">· actual</span>' : ''}</span>${tambien}</span><span class="pill ${vClase(a.r.veredicto)}">${a.r.nota}</span></button>`;
     }).join('') : '<p class="muted">Ninguna alternativa llega a «Pega» con el tiempo, el tipo de día y lo que has elegido.</p>'}</div>
     ${altsMatices.length ? `<h3>Con matices <span class="muted small">(valen, pero con un pero)</span></h3><div class="stack">${altsMatices.map(a => filaFloja(a, 'matiz')).join('')}</div>` : ''}
@@ -2198,17 +2242,29 @@ const ACT = {
   'recargar-tiempo'() { cerrarHoja(); cargarTiempo(true); render(); },
   pieza(el) { UI.hojaPieza = { i: +el.dataset.i, h: el.dataset.h }; abrirHoja(hojaPieza(+el.dataset.i, el.dataset.h)); },
   cambiar(el) {
-    // La pieza tocada pasa a ser «elegida»: manda, y las sugeridas se ajustan a ella (solo si ganan al menos CFG.cambioMinimo)
+    // La pieza tocada pasa a ser «elegida». Solo cambia ella (y el calcetín); el resto, únicamente si lo exigen las reglas o el tiempo.
+    // Para rehacer todo alrededor de lo elegido está «Adaptar el resto».
     const i = +el.dataset.i, h = el.dataset.h, id = el.dataset.id || null, c = UI.cards[i];
     const fijas = fijasDe(i); fijas[h] = id;
-    const r = mejorConFijas(UI.cache.lista, fijas, c.o);
+    const r = cambioMinimo(UI.cache.lista, fijas, c.o);
     if (!r) { delete fijas[h]; toast('Esa pieza no encaja con el tiempo o el tipo de día'); return; }
-    const cambiadas = HUECOS.filter(x => x.k !== h && (r.o[x.k] || null) !== (c.o[x.k] || null)).length;
+    const cambiadas = HUECOS.filter(x => x.k !== h && x.k !== 'calcetin' && (r.o[x.k] || null) !== (c.o[x.k] || null)).length;
     UI.cards[i] = r; UI.vistos.push(r.clave);
     cerrarHoja(); render();
-    if (cambiadas) toast(`${cambiadas === 1 ? "Ajustada 1 pieza" : `Ajustadas ${cambiadas} piezas`} a tu elección`);
+    const ad = adaptarAFijas(UI.cache.lista, fijas), mejora = ad && ad.nota > r.nota ? ` · con «Adaptar el resto» sube a ${ad.nota}` : '';
+    if (cambiadas) toast(`${cambiadas === 1 ? 'Cambiada 1 pieza más' : `Cambiadas ${cambiadas} piezas más`} para cumplir las reglas${mejora}`);
+    else if (mejora) toast(`Solo cambia esa pieza${mejora}`);
   },
   descartada(el) { toast(el.dataset.motivo || 'No encaja'); },
+  adaptar(el) {
+    // Rehace el outfit entero alrededor de las piezas elegidas; las demás pasan a ser sugerencias de la app
+    const i = +el.dataset.i, antes = UI.cards[i], fijas = fijasDe(i);
+    const r = adaptarAFijas(UI.cache.lista, fijas);
+    if (!r || r.clave === antes.clave || r.nota <= antes.nota) { toast('Ya es el mejor outfit con lo que has elegido'); return; }
+    const n = HUECOS.filter(x => (r.o[x.k] || null) !== (antes.o[x.k] || null)).length;
+    UI.cards[i] = r; UI.vistos.push(r.clave); render();
+    toast(`Outfit adaptado a tu elección: ${n === 1 ? 'cambia 1 pieza' : `cambian ${n} piezas`}`, 'Deshacer', () => { UI.cards[i] = antes; render(); });
+  },
   soltar(el) { const i = +el.dataset.i; delete fijasDe(i)[el.dataset.h]; cerrarHoja(); render(); },
   'soltar-todo'(el) { const fk = claveFijas(); if (UI.fijas[fk]) UI.fijas[fk][+el.dataset.i] = {}; render(); toast('Piezas soltadas: la app vuelve a elegir libremente'); },
   melopongo(el) { const c = UI.cards[+el.dataset.i]; registrarUso(c.o, UI.video ? 'videollamada' : UI.tipoDia); },

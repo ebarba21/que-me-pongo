@@ -283,8 +283,14 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V3.4';
+const VERSION = 'V3.5';
 const CAMBIOS = {
+  'V3.5': [
+    'Armario al día (01-11-2026): entra el jersey de punto inglés marrón de Zara y tres zapatillas (negra de suela blanca, blanca con talón negro y blanco roto con talón marrón). El polo de punto marrón oscuro pasa al archivo porque lo devolviste; tu historial se conserva.',
+    'Reglas de las zapatillas nuevas: la blanco roto es la más arreglada y siempre va con el cinturón marrón; la negra, mejor con vaqueros o chino negro o gris; la blanca, comodín. Ninguna es de lona ni de ante, así que la lluvia no las penaliza.',
+    'Día «Reunión»: ninguna zapatilla, aunque sea la más arreglada.',
+    'Outfits probados 03 y 14 rehechos con el jersey nuevo.'
+  ],
   'V3.4': [
     '«Adaptar el resto» aparece siempre que hayas elegido alguna pieza. Si ya no hay nada mejor, lo marca con ✓ y al pulsarlo te dice qué limita la nota.'
   ],
@@ -494,6 +500,20 @@ const CONFIG = {
       { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: 1, texto: 'Vans con chino negro: día casual' },
       { ajuste: -8, texto: 'Vans: solo con vaqueros o chino negro' }
     ],
+    'zap-negra': [
+      { pantalon: { tipo: 'vaquero' }, ajuste: 2, texto: 'Zapatilla negra con vaquero' },
+      { pantalon: { tipo: 'chino', familia: ['negro', 'gris'] }, ajuste: 2, texto: 'Zapatilla negra con chino {pf}' },
+      { pantalon: { tipo: 'chino', familia: ['beige'] }, ajuste: 0, texto: '' }
+    ],
+    'zap-blanca': [
+      { pantalon: { tipo: 'chino', familia: ['gris', 'marino', 'negro'] }, ajuste: 3, texto: 'Zapatilla blanca con chino {pf}' },
+      { ajuste: 1, texto: 'Zapatilla blanca: comodín' }
+    ],
+    'zap-crudo': [
+      { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -4, texto: 'Talón marrón con chino negro: el cálido choca' },
+      { pantalon: { tipo: 'chino', familia: ['beige', 'marino', 'gris'] }, ajuste: 3, texto: 'Zapatilla blanco roto con chino {pf}' },
+      { pantalon: { tipo: 'vaquero' }, ajuste: 3, texto: 'Zapatilla blanco roto con vaquero' }
+    ],
     _derby: [
       { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -6, texto: 'Zapato marrón con chino negro: mejor evitarlo' },
       { pantalon: { tipo: 'chino' }, ajuste: 2, texto: 'Zapato con chino: buena base de oficina' }
@@ -533,7 +553,7 @@ const CONFIG = {
   /* ---------- Contexto (Bloque VII) ---------- */
   // Cada tipo de día fija un objetivo y un mínimo de formalidad. Mínimo y prohibiciones: obligatorios.
   tipoDia: {
-    reunion: { nombre: 'Reunión', objetivo: 4.2, minimo: 3, camisetaSola: false },
+    reunion: { nombre: 'Reunión', objetivo: 4.2, minimo: 3, camisetaSola: false, sinZapatilla: true },
     normal: { nombre: 'Normal', objetivo: 3.7, minimo: 1, camisetaSola: true },   // Eric: Vans y camiseta sola valen en la oficina
     casual: { nombre: 'Casual', objetivo: 3.0, minimo: 1, camisetaSola: true }
   },
@@ -617,7 +637,6 @@ const INVENTARIO_BASE = [
   P('polo-marino', 'Polo marino', 'base', 'polo', 'marino', '#283452', 3, 1, { manga: 'corta', material: 'Piqué' }),
   P('polo-verde', 'Polo verde oliva', 'base', 'polo', 'verde', '#5a5d3c', 3, 1, { manga: 'corta', material: 'Punto', notas: 'Verde oliva' }),
   P('z-tostado', 'Polo punto tostado', 'base', 'polo-punto', 'marrón', '#a77c57', 4, 1, { manga: 'corta', material: '90% algodón, 10% seda', cuidados: 'Lavado delicado', tienda: 'Zara', ref: '6674/445', compra: '2026-10-21' }),
-  P('z-marron', 'Polo punto marrón oscuro', 'base', 'polo-punto', 'marrón', '#4f3627', 4, 1, { manga: 'corta', material: '90% algodón, 10% seda', cuidados: 'Lavado delicado', tienda: 'Zara', ref: '6674/445', compra: '2026-10-21' }),
   P('z-celeste', 'Polo punto ligero celeste', 'base', 'polo-punto', 'azul cielo', '#9fc4e2', 4, 1, { manga: 'corta', temporadas: MAR_OCT, material: '73% algodón, 17% lino, 10% seda', notas: 'Arruga algo', tienda: 'Zara', ref: '0077/303', compra: '2026-10-21' }),
   P('cam-negra', 'Camiseta negra', 'base', 'camiseta', 'negro', '#19191b', 2, 1, { manga: 'corta' }),
   P('u-supima', 'Camiseta Supima blanca', 'base', 'camiseta', 'blanco', '#f5f3ef', 2, 1, { manga: 'corta', material: '100% algodón Supima', notas: 'También va bajo jersey', tienda: 'Uniqlo', ref: 'E455365-000', compra: '2026-10-21' }),
@@ -628,6 +647,7 @@ const INVENTARIO_BASE = [
   P('jer-marino', 'Jersey marino Tommy Hilfiger', 'capa', 'jersey', 'marino', '#1e2640', 4, 2, { tienda: 'Tommy Hilfiger', notas: '95% marino · detalle blanco en cuello y puños' }),
   P('u-merino-rojo', 'Jersey merino rojo', 'capa', 'jersey', 'granate', '#8c1626', 4, 2, { temporadas: OCT_ABR, material: '100% merino extrafino', cuidados: 'Lavar a 40 °C como máximo · sin secadora', tienda: 'Uniqlo', ref: 'E450535-000 col.17', notas: 'Cuello redondo · rojo intenso, entre granate y rojo: usa las reglas del granate', compra: '2026-10-21' }),
   P('u-merino-marron', 'Jersey merino marrón oscuro', 'capa', 'jersey', 'marrón', '#4a3528', 4, 2, { temporadas: OCT_ABR, material: '100% merino extrafino', cuidados: 'Lavar a 40 °C como máximo · sin secadora', tienda: 'Uniqlo', ref: 'E450535-000 col.38', notas: 'Cuello redondo', compra: '2026-10-21' }),
+  P('z-ingles-marron', 'Jersey punto inglés marrón', 'capa', 'jersey', 'marrón', '#4e3e35', 3, 2, { temporadas: OCT_ABR, material: '100% algodón, punto inglés', tienda: 'Zara', ref: '3284/341/724', notas: 'Regular fit · cuello redondo · marrón vigoré · casi el mismo color que el merino marrón: el merino es el de los días de reunión', compra: '2026-11-01' }),
   P('caz-beige', 'Cazadora beige', 'exterior', 'cazadora', 'beige', '#c9b48f', 3, 2),
   P('u-harrington', 'Harrington azul marino', 'exterior', 'cazadora', 'marino', '#232e44', 3, 2, { material: '50% algodón, 50% poliéster', cuidados: 'Lavar a mano en frío', tienda: 'Uniqlo', ref: 'E484610-000 col.69', notas: 'Corte relax · aguanta llovizna', compra: '2026-10-21' }),
   P('ch-negro', 'Chinos negros', 'pantalon', 'chino', 'negro', '#1f1f22', 4, 0, { corte: 'recto' }),
@@ -638,6 +658,9 @@ const INVENTARIO_BASE = [
   P('mr530', 'New Balance MR530 beige', 'calzado', 'zapatilla', 'beige', '#d8ccb5', 2, 0),
   P('u740', 'New Balance U740 blancas/grises', 'calzado', 'zapatilla', 'blanco', '#ebebe8', 2, 0, { hex2: '#a9adb2', notas: 'Zapatilla comodín' }),
   P('vans', 'Vans negras/blancas', 'calzado', 'zapatilla', 'negro', '#1b1b1d', 1, 0, { hex2: '#f4f4f2', material: 'Lona', notas: 'Solo casual' }),
+  P('zap-negra', 'Zapatilla negra suela blanca', 'calzado', 'zapatilla', 'negro', '#1c1c1e', 2, 0, { hex2: '#f2f0ea', material: 'Aspecto piel lisa', volumen: 'robusto', notas: 'Talón blanco · suela de plataforma blanca' }),
+  P('zap-blanca', 'Zapatilla blanca talón negro', 'calzado', 'zapatilla', 'blanco', '#ece9e1', 2, 0, { hex2: '#e4dccb', material: 'Aspecto piel lisa', volumen: 'robusto', notas: 'Talón negro · suela crema gruesa' }),
+  P('zap-crudo', 'Zapatilla blanco roto talón marrón', 'calzado', 'zapatilla', 'blanco', '#e9e2cf', 3, 0, { hex2: '#75502f', material: 'Aspecto piel, talón granulado', volumen: 'fino', cinturon: 'marron', notas: 'Minimalista · talón marrón cognac · suela fina · no vale en día «Reunión»' }),
   P('zap-derby-cognac', 'Derby liso cognac', 'calzado', 'derby', 'cognac', '#75502f', 4, 0, { material: 'Sintético, aspecto ante', tienda: 'Pier One (Zalando)', ref: 'PI912C0GX-O11', volumen: 'fino', notas: 'Suela oscura fina con canto marrón' }),
   P('zap-derby-oscuro', 'Derby marrón oscuro', 'calzado', 'derby', 'marrón oscuro', '#4a3226', 3, 0, { material: 'Sintético, aspecto ante', tienda: 'Pier One (Zalando)', ref: 'PI915C014-O11', volumen: 'robusto', notas: 'Punta mocasín · suela negra dentada gruesa con buen agarre' }),
   P('calc-negro', 'Calcetines negros', 'calcetin', 'calcetin', 'negro', '#1b1b1d', null, 0),
@@ -650,16 +673,17 @@ const CINTURONES = {
   marron: 'cinturón marrón de ante',
   negro: 'cinturón negro'
 };
-// Con zapato marrón, el marrón. Con zapatilla, el negro, salvo con chino beige o vaqueros, donde el negro queda duro.
+// Con zapato marrón, el marrón. Si la prenda lo fija (campo cinturon), ese. Con zapatilla, el negro, salvo con chino beige o vaqueros, donde el negro queda duro.
 const CINTURON_MARRON_CON_ZAPATILLA = ['beige', 'vaquero'];
 function cinturonPara(calz, pant) {
+  if (calz.cinturon && CINTURONES[calz.cinturon]) return CINTURONES[calz.cinturon];   // zap-crudo: el talón marrón pide el marrón
   if (calz.tipo === 'derby') return CINTURONES.marron;
   return CINTURON_MARRON_CON_ZAPATILLA.includes(fam(pant)) ? CINTURONES.marron : CINTURONES.negro;
 }
 const CINTURONES_TEXTO = 'Marrón de ante, ancho, hebilla plateada (Pier One PI952D048-O11) · negro de piel granulada, de vestir (Pier One PI954D01Z-Q11)';
 
 /* Correcciones de datos por versión: se aplican una vez a lo guardado en el iPhone */
-const DATOS_V = 4;
+const DATOS_V = 5;
 const CORRECCIONES = {
   2: {
     renombrar: { 'jer-blancomarino': 'jer-marino' },
@@ -673,14 +697,16 @@ const CORRECCIONES = {
   // V1.2: nueva hora de salida por defecto (solo si seguía la antigua, 07:15)
   3: { horaAntigua: '07:15' },
   // V3.2: corte de los chinos (Eric: todos rectos) y volumen de los derbys
-  4: { campos: { 'ch-negro': ['corte'], 'ch-gris': ['corte'], 'ch-marino': ['corte'], 'ch-beige': ['corte'], 'zap-derby-cognac': ['volumen'], 'zap-derby-oscuro': ['volumen'] } }
+  4: { campos: { 'ch-negro': ['corte'], 'ch-gris': ['corte'], 'ch-marino': ['corte'], 'ch-beige': ['corte'], 'zap-derby-cognac': ['volumen'], 'zap-derby-oscuro': ['volumen'] } },
+  // V3.5 (01-11-2026): altas del inventario; el polo marrón oscuro devuelto pasa al archivo (el historial se conserva)
+  5: { altas: ['z-ingles-marron', 'zap-negra', 'zap-blanca', 'zap-crudo'], archivar: ['z-marron'] }
 };
 
 /* Apartado 8 · Outfits probados */
 const OUTFITS_PROBADOS = [
   ['01', 'Oficina tierra', 'z-tostado', null, null, 'ch-marino', 'zap-derby-cognac', 'calc-negro', 'Business casual'],
   ['02', 'Cielo y gris', 'z-celeste', null, 'u-harrington', 'ch-gris', 'u740', 'calc-gris', 'Business casual'],
-  ['03', 'Café con leche', 'z-marron', null, null, 'ch-beige', 'zap-derby-oscuro', 'calc-gris', 'Smart casual'],
+  ['03', 'Café con leche', 'camisa-celeste', 'z-ingles-marron', null, 'ch-beige', 'zap-derby-cognac', 'calc-gris', 'Business casual'],
   ['04', 'Granate de lunes', 'u-supima', 'u-merino-rojo', null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris', 'Business casual'],
   ['05', 'Marrón y marino', 'z-celeste', 'u-merino-marron', null, 'ch-marino', 'zap-derby-cognac', 'calc-negro', 'Business casual'],
   ['06', 'Viernes limpio', 'u-supima', null, 'u-harrington', 'vaqueros', 'vans', 'calc-blanco', 'Casual'],
@@ -691,7 +717,7 @@ const OUTFITS_PROBADOS = [
   ['11', 'Granate y beige', 'camisa-blanca', 'u-merino-rojo', null, 'ch-beige', 'zap-derby-oscuro', 'calc-gris', 'Business casual'],
   ['12', 'Tonal marrón', 'z-tostado', 'u-merino-marron', null, 'ch-beige', 'mr530', 'calc-gris', 'Smart casual'],
   ['13', 'Celeste y beige', 'z-celeste', null, 'u-harrington', 'ch-beige', 'zap-derby-cognac', 'calc-gris', 'Business casual'],
-  ['14', 'Marrón y gris', 'z-marron', null, 'u-harrington', 'ch-gris', 'u740', 'calc-gris', 'Smart casual'],
+  ['14', 'Marrón y gris', 'u-supima', 'z-ingles-marron', 'u-harrington', 'ch-gris', 'zap-blanca', 'calc-gris', 'Smart casual'],
   ['15', 'Marino de oficina', 'camisa-blanca', 'jer-marino', null, 'ch-gris', 'zap-derby-cognac', 'calc-gris', 'Business casual'],
   ['16', 'Merino casual', 'u-supima', 'u-merino-marron', null, 'vaqueros', 'zap-derby-oscuro', 'calc-gris', 'Casual'],
   ['17', 'Blanco y negro', 'cam-negra', null, 'caz-beige', 'vaqueros', 'vans', 'calc-blanco', 'Casual'],
@@ -1024,6 +1050,7 @@ function aplicarContexto(o, M, ctx, z, add) {
     // Obligatorio: mínimo de formalidad en cada prenda visible y camiseta sola
     const visibles = z.filter(x => x.rol !== 'calcetin' && x.p.formalidad != null && !(x.rol === 'base' && capa));
     for (const x of visibles) if (x.p.formalidad < TD.minimo) add(-20, `${x.p.nombre}: no va en un día «${TD.nombre}»`, 'dia', true);
+    if (TD.sinZapatilla && calz.tipo === 'zapatilla' && calz.formalidad >= TD.minimo) add(-20, `${calz.nombre}: ninguna zapatilla en un día «${TD.nombre}»`, 'dia', true);
     if (!TD.camisetaSola && base.tipo === 'camiseta' && !capa) add(-20, `Camiseta sin jersey: no va en un día «${TD.nombre}»`, 'dia', true);
     // Suave: ajuste al objetivo de formalidad del día
     const AF = C.ajusteFormalidad, t = visibles.reduce((s, x) => s + x.a, 0) || 1;
@@ -1395,10 +1422,48 @@ const CASOS_INFORME = [
 ];
 // Bandas de nota por etiqueta (las del informe son orientativas)
 const BANDAS = { R: [78, 100], A: [62, 84], D: [45, 74], X: [55, 82], I: [0, 64], ADV: [0, 64] };
+// Aplica CORRECCIONES pendientes a un estado guardado (prendas, historial, favoritos y probador)
+function corregirDatos(r) {
+  const base = mapa(INVENTARIO_BASE);
+  for (let v = r.datosV + 1; v <= DATOS_V; v++) {
+    const c = CORRECCIONES[v]; if (!c) continue;
+    const get = id => r.prendas.find(p => p.id === id);
+    // Si en la V1.0 el asistente separó el jersey en dos, se queda solo el marino
+    if (v === 2 && !get('jer-blancomarino') && get('jer-blanco') && get('jer-marino')) {
+      const b = get('jer-blanco');
+      r.prendas = r.prendas.filter(p => p !== b);
+      r.favoritos = r.favoritos.filter(f => !Object.values(f.o).includes(b.id));
+      if (r.probador && r.probador.capa === b.id) r.probador.capa = null;
+    }
+    for (const [de, a] of Object.entries(c.renombrar || {})) {
+      const p = get(de); if (!p || get(a)) continue;
+      p.id = a;
+      const cambia = o => { if (o) for (const k of Object.keys(o)) if (o[k] === de) o[k] = a; };
+      r.usos.forEach(u => { u.ids = u.ids.map(x => x === de ? a : x); cambia(u.o); });
+      r.favoritos.forEach(f => cambia(f.o)); cambia(r.probador);
+    }
+    for (const [id, campos] of Object.entries(c.campos || {})) {
+      const p = get(id), b = base[id]; if (!p || !b) continue;
+      campos.forEach(k => { p[k] = clonar(b[k]); });
+    }
+    for (const id of c.altas || []) if (!get(id) && base[id]) r.prendas.push(clonar(base[id]));
+    for (const id of c.archivar || []) {
+      const p = get(id); if (!p) continue;
+      p.archivada = true; p.disponible = false;
+      if (r.probador && Object.values(r.probador).includes(id)) r.probador = clonar(OUTFITS_PROBADOS[1].o);
+    }
+    if (v === 2 && r.ajustes && !r.ajustes.cinturones) r.ajustes.cinturones = CINTURONES_TEXTO;
+    if (c.horaAntigua && r.ajustes.hora === c.horaAntigua) r.ajustes.hora = AJUSTES_BASE.hora;
+    r.datosV = v;
+  }
+  return r;
+}
 // Prendas solo para tests (compras pendientes o casos del informe): no están en tu armario
 const PRENDAS_TEST = [
   P('t-calc-marino', 'Calcetines marino', 'calcetin', 'calcetin', 'marino', '#232b3f', null, 0),
   P('t-calc-marron', 'Calcetines marrón', 'calcetin', 'calcetin', 'marrón', '#4b3426', null, 0),
+  // Devuelto el 01-11-2026: se queda para los casos del informe que lo usan
+  P('z-marron', 'Polo punto marrón oscuro', 'base', 'polo-punto', 'marrón', '#4f3627', 4, 1, { manga: 'corta', material: '90% algodón, 10% seda', cuidados: 'Lavado delicado', tienda: 'Zara', ref: '6674/445', compra: '2026-10-21' }),
   P('t-polo-gris', 'Polo piqué gris', 'base', 'polo', 'gris', '#9a9da1', 3, 1, { manga: 'corta', material: 'Piqué' })
 ];
 function runTests(silencioso) {
@@ -1496,7 +1561,7 @@ function runTests(silencioso) {
     ok('Ninguna combinación propuesta incumple una regla obligatoria', violaciones === 0, `${total} combinaciones en 12 escenarios`);
     ok('Las 3 propuestas de HOY tienen estilo ≥ 80 en todos los escenarios', minTop >= 80, `mínimo: ${minTop}`);
     const rr = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 12, tmax: 20, lluvia: 0 }, tipoDia: 'reunion', mes: 10 }, 3);
-    ok('Reunión: ni zapatillas, ni vaqueros, ni camiseta sola', rr.lista.length > 0 && rr.lista.every(x => !['mr530', 'u740', 'vans'].includes(x.o.calzado) && x.o.pantalon !== 'vaqueros' && !(M[x.o.base].tipo === 'camiseta' && !x.o.capa)));
+    ok('Reunión: ni zapatillas, ni vaqueros, ni camiseta sola', rr.lista.length > 0 && rr.lista.every(x => M[x.o.calzado].tipo !== 'zapatilla' && x.o.pantalon !== 'vaqueros' && !(M[x.o.base].tipo === 'camiseta' && !x.o.capa)));
     const rn = proponer(clonar(INVENTARIO_BASE), { tiempo: { ts: 17, tmax: 22, lluvia: 0 }, tipoDia: 'normal', mes: 10 }, 3);
     const rnTodas = generar(clonar(INVENTARIO_BASE), { tiempo: { ts: 22, tmax: 26, lluvia: 0 }, tipoDia: 'normal', mes: 10 });
     ok('Día normal: las Vans y la camiseta sola están permitidas', rnTodas.some(x => x.o.calzado === 'vans') && rnTodas.some(x => M[x.o.base].tipo === 'camiseta' && !x.o.capa));
@@ -1539,6 +1604,31 @@ function runTests(silencioso) {
     const inv3 = clonar(INVENTARIO_BASE), M3 = mapa(inv3);
     const vc = proponerVideollamada(inv3, { mes: 10 }, 3);
     ok('Videollamada: parte de arriba con F ≥ 3', vc.length === 3 && vc.every(x => M3[x.o.base].formalidad >= 3 && (!x.o.capa || M3[x.o.capa].formalidad >= 3)));
+
+    // 8. Armario del 01-11-2026: jersey punto inglés, tres zapatillas y polo marrón oscuro devuelto
+    {
+      const ids = inv.map(p => p.id);
+      ok('Inventario 01-11: altas presentes y el polo devuelto fuera del armario base', ['z-ingles-marron', 'zap-negra', 'zap-blanca', 'zap-crudo'].every(id => ids.includes(id)) && !ids.includes('z-marron'));
+      const er = evaluar(o6('z-tostado', null, null, 'ch-beige', 'zap-crudo', 'calc-gris'), M, { tipoDia: 'reunion', mes: 11 });
+      const en = evaluar(o6('z-tostado', null, null, 'ch-beige', 'zap-crudo', 'calc-gris'), M, { tipoDia: 'normal', mes: 11 });
+      ok('Reunión: ninguna zapatilla, tampoco la blanco roto (F3); en día normal sí', er.reglas.length > 0 && er.veredicto === 'No pega' && !en.reglas.length, `reunión ${er.nota} · normal ${en.nota}`);
+      ok('Zapatilla blanco roto: siempre cinturón marrón', inv.filter(p => p.hueco === 'pantalon').every(pt => cinturonPara(M['zap-crudo'], pt) === CINTURONES.marron));
+      const lluvia = z => evaluar(o6('u-supima', 'z-ingles-marron', 'u-harrington', 'ch-gris', z, 'calc-gris'), M, { tiempo: { ts: 12, tmax: 18, lluvia: 80 }, mes: 11 }).notas.filter(n => n.regla === 'lluvia' && n.ajuste < 0).length;
+      ok('Lluvia: las zapatillas de piel no restan; los derbys de ante y las Vans sí', ['zap-negra', 'zap-blanca', 'zap-crudo'].every(z => lluvia(z) === 0) && ['zap-derby-cognac', 'zap-derby-oscuro', 'vans'].every(z => lluvia(z) > 0));
+      const ec = evaluar(o6('z-tostado', null, null, 'ch-negro', 'zap-crudo', 'calc-negro'), M), eb = evaluar(o6('z-tostado', null, null, 'ch-beige', 'zap-crudo', 'calc-gris'), M);
+      ok('Zapatilla blanco roto: mejor con chino beige que con chino negro', eb.estilo > ec.estilo, `beige ${eb.estilo} · negro ${ec.estilo}`);
+      // Migración de un iPhone con datos de la V3.4
+      const viejo = clonar(INVENTARIO_BASE).filter(p => !['z-ingles-marron', 'zap-negra', 'zap-blanca', 'zap-crudo'].includes(p.id)).concat([clonar(PRENDAS_TEST.find(p => p.id === 'z-marron'))]);
+      const est = { prendas: viejo, usos: [{ fecha: '2026-10-28', tipoDia: 'normal', ids: ['z-marron', 'ch-beige', 'zap-derby-oscuro'], o: o6('z-marron', null, null, 'ch-beige', 'zap-derby-oscuro', 'calc-gris') }],
+        favoritos: [], ajustes: clonar(AJUSTES_BASE), probador: o6('z-marron', null, null, 'ch-gris', 'u740', 'calc-gris'), datosV: 4 };
+      const mig = corregirDatos(est), Mm = mapa(mig.prendas);
+      const mig2 = corregirDatos(clonar(mig));
+      ok('Migración V3.4 → V3.5: altas añadidas, polo devuelto archivado, historial intacto',
+        mig.datosV === DATOS_V && ['z-ingles-marron', 'zap-negra', 'zap-blanca', 'zap-crudo'].every(id => Mm[id] && Mm[id].disponible) && Mm['z-marron'].archivada && !Mm['z-marron'].disponible &&
+        mig.usos[0].ids[0] === 'z-marron' && mig.probador.base !== 'z-marron' && mig2.prendas.length === mig.prendas.length,
+        `${mig.prendas.length} prendas (${mig.prendas.filter(p => !p.archivada).length} activas)`);
+      ok('Una prenda archivada nunca aparece en HOY', !proponer(mig.prendas, { tiempo: { ts: 12, tmax: 19, lluvia: 0 }, tipoDia: 'normal', mes: 11 }, 3).lista.some(x => Object.values(x.o).includes('z-marron')));
+    }
   } catch (err) {
     ok('Error al ejecutar los tests', false, String(err && err.stack || err));
   } finally { CFG = guardado; PARES = construirPares(CFG); }
@@ -1591,36 +1681,6 @@ function migrar(s) {
   r.datosV = s.datosV || 1;
   r.gustos = s.gustos && Array.isArray(s.gustos.no) ? s.gustos : { no: [] };
   return corregirDatos(r);
-}
-// Aplica CORRECCIONES pendientes a un estado guardado (prendas, historial, favoritos y probador)
-function corregirDatos(r) {
-  const base = mapa(INVENTARIO_BASE);
-  for (let v = r.datosV + 1; v <= DATOS_V; v++) {
-    const c = CORRECCIONES[v]; if (!c) continue;
-    const get = id => r.prendas.find(p => p.id === id);
-    // Si en la V1.0 el asistente separó el jersey en dos, se queda solo el marino
-    if (v === 2 && !get('jer-blancomarino') && get('jer-blanco') && get('jer-marino')) {
-      const b = get('jer-blanco');
-      r.prendas = r.prendas.filter(p => p !== b);
-      r.favoritos = r.favoritos.filter(f => !Object.values(f.o).includes(b.id));
-      if (r.probador && r.probador.capa === b.id) r.probador.capa = null;
-    }
-    for (const [de, a] of Object.entries(c.renombrar || {})) {
-      const p = get(de); if (!p || get(a)) continue;
-      p.id = a;
-      const cambia = o => { if (o) for (const k of Object.keys(o)) if (o[k] === de) o[k] = a; };
-      r.usos.forEach(u => { u.ids = u.ids.map(x => x === de ? a : x); cambia(u.o); });
-      r.favoritos.forEach(f => cambia(f.o)); cambia(r.probador);
-    }
-    for (const [id, campos] of Object.entries(c.campos || {})) {
-      const p = get(id), b = base[id]; if (!p || !b) continue;
-      campos.forEach(k => { p[k] = clonar(b[k]); });
-    }
-    if (v === 2 && !r.ajustes.cinturones) r.ajustes.cinturones = CINTURONES_TEXTO;
-    if (c.horaAntigua && r.ajustes.hora === c.horaAntigua) r.ajustes.hora = AJUSTES_BASE.hora;
-    r.datosV = v;
-  }
-  return r;
 }
 function cargar() { try { const raw = localStorage.getItem(KEY); if (raw) return migrar(JSON.parse(raw)); } catch (e) { console.warn(e); } return estadoNuevo(); }
 let S = cargar();

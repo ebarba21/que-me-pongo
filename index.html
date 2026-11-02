@@ -121,6 +121,18 @@ main.view { max-width: 600px; margin: 0 auto; padding: 14px max(16px, var(--sar)
 .dot { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--outline); background-size: cover; background-position: center; flex: none; }
 .frase { font-size: .93rem; line-height: 1.45; }
 .frase b { font-weight: 600; }
+.toques-btn { width: 100%; min-height: 44px; display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px; padding: 8px 12px; background: var(--paper2); border: 1px solid var(--line); border-radius: 12px; text-align: left; font-weight: 600; font-size: .92rem; color: var(--ink); }
+.toques-btn .tq-ico { color: var(--accent); }
+.toques-btn .tq-n { font-size: .78rem; font-weight: 600; color: var(--soft); background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+.toques-btn svg { width: 14px; height: 14px; color: var(--soft); }
+.tq-piezas { gap: 6px; }
+.chip.static { pointer-events: none; min-height: 32px; font-size: .8rem; }
+.tq-grupo { display: grid; gap: 8px; }
+.tq-grupo h3 { margin: 0; }
+.tq-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tq-lista li { display: grid; gap: 4px; padding: 10px 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; font-size: .92rem; line-height: 1.45; }
+.tq-lista li.clave { border-color: var(--accent); }
+.tq-clave { font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 700; }
 .worn { color: var(--ok); font-weight: 600; font-size: .9rem; }
 .subnotas { display: flex; gap: 12px; font-size: .78rem; color: var(--soft); }
 .subnotas b { color: var(--ink); font-weight: 600; }
@@ -286,8 +298,14 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V3.7';
+const VERSION = 'V3.8';
 const CAMBIOS = {
+  'V3.8': [
+    'Toques finales: cada propuesta tiene un botón «Toques finales» que abre todos los detalles para llevarla bien, agrupados: capas y trayecto, por dentro o por fuera, cuello, mangas y reloj, cinturón, pantalón y bajo, calcetín y calzado, y repaso antes de salir. Los clave van marcados.',
+    'La frase de la tarjeta enseña los dos toques clave (por ejemplo, «que asome solo 1 cm de camiseta en el cuello»).',
+    'Los toques usan tus prendas y el tiempo del día: quitarte la cazadora al llegar a Barcelona, arremangar la camisa con calor, Harrington cerrada si llueve, vapor al polo celeste, el detalle blanco de los puños del jersey Tommy Hilfiger…',
+    'También en el Probador y en videollamada (solo la parte de arriba).'
+  ],
   'V3.7': [
     'Cinturones en el outfit: el marrón de ante y el negro son prendas del armario y cada propuesta lleva el que toca (marrón con derbys y con la zapatilla blanco roto; con zapatilla, negro con chino negro, gris o marino y marrón con chino beige o vaqueros). Se pueden cambiar con «Elegir» y probar en el Probador. Negro con zapato marrón: nunca.',
     '«Quiero ponerme…» en HOY: eliges una o varias prendas (una por hueco) y las tres propuestas se montan a su alrededor. Manda tu elección aunque el tiempo diga otra cosa (te avisa), pero nunca se salta las reglas de combinar.',
@@ -1511,24 +1529,150 @@ function contarBuenos(prendas) {
   return { cuenta, total };
 }
 
-/* Frase de estilista: por qué funciona + cómo llevarlo */
-function fraseEstilista(o, M, ev, ctx) {
+/* ---------- Toques finales (V3.8) ----------
+   Detalles de estilista para llevar bien cada outfit: por dentro o por fuera, cuello, mangas y reloj,
+   cinturón, bajo del pantalón, calcetín y calzado, trayecto y repaso antes de salir.
+   Cada toque: { g: grupo, t: frase completa, c: versión corta para la tarjeta (opcional), p: prioridad 1 clave · 2 importante · 3 detalle }.
+   Solo usa las prendas del outfit y el tiempo del día; no inventa prendas (el reloj va siempre con «si llevas»). */
+const TOQUES_GRUPOS = [
+  ['trayecto', 'Capas y trayecto'],
+  ['dentro', 'Por dentro o por fuera'],
+  ['cuello', 'Cuello'],
+  ['mangas', 'Mangas y reloj'],
+  ['cinturon', 'Cinturón'],
+  ['bajo', 'Pantalón y bajo'],
+  ['pies', 'Calcetín y calzado'],
+  ['antes', 'Antes de salir']
+];
+const TOQUES_VIDEO = ['cuello', 'mangas', 'antes'];
+function toquesFinales(o, M, ctx, opc) {
   const base = M[o.base], capa = o.capa && M[o.capa], ext = o.exterior && M[o.exterior], pant = M[o.pantalon], calz = M[o.calzado];
+  const calc = o.calcetin && M[o.calcetin];
+  if (!base) return [];
+  const arriba = !pant || !calz;   // videollamada: solo la parte de arriba
+  const r = [], add = (g, p, t, c) => r.push({ g, p, t, c: c || null });
+  const t = ctx && ctx.tiempo, u = (ctx && ctx.umbrales) || AJUSTES_BASE.umbrales;
+  const bt = base.tipo, esPolo = bt === 'polo' || bt === 'polo-punto', esCamisa = bt === 'camisa', esCamiseta = bt === 'camiseta';
+  const zapatilla = !arriba && calz.tipo === 'zapatilla', derby = !arriba && calz.tipo === 'derby';
+  const chino = !arriba && pant.tipo === 'chino', vaquero = !arriba && pant.tipo === 'vaquero';
+  const llueve = t && t.lluvia != null && t.lluvia >= u.lluvia;
+  const mangaCorta = (base.manga || (esCamisa ? 'larga' : 'corta')) === 'corta';
+
+  // Cinturón: el del outfit; si no lo hay (Probador), el que toca según el apartado 4
+  const cint = o.cinturon && M[o.cinturon];
+  const cintClase = cint ? claseCinturon(cint) : arriba ? null : cinturonEsperado(calz, pant).c;
+  const cintNombre = cint ? cint.nombre.toLowerCase() : CINTURONES[cintClase];
+  const hebilla = cint && /hebilla plateada/i.test(cint.notas || '') ? 'plateado' : null;
+
+  /* Capas y trayecto */
+  if (!arriba && t && t.ts != null && t.tmax != null && Math.abs(t.tmax - t.ts) > u.difTrayecto && (capa || ext)) {
+    const quita = ext ? 'la cazadora' : 'el jersey';
+    add('trayecto', 1, `Sales de Manresa a ${Math.round(t.ts)} °C y en Barcelona llegas a ${Math.round(t.tmax)} °C: al llegar, quítate primero ${quita}. Lo que queda debajo combina solo.`,
+      `${quita.replace('la ', '').replace('el ', '')} fuera al llegar a Barcelona`);
+  }
+  if (ext) {
+    add('trayecto', 3, `${ext.nombre}: abierta o cerrada hasta la mitad y con el cuello bajado. Su largo bueno es a la cadera, tapando el cinturón.`);
+    if (capa) add('trayecto', 3, 'El jersey no debe asomar más de un dedo por el bajo de la cazadora; si asoma más, tira del jersey hacia abajo para que quede liso y parejo.');
+    if (llueve && /harrington/i.test(ext.nombre)) add('trayecto', 2, 'Hoy llueve: cierra la Harrington y súbete el cuello para el trayecto; en la oficina, vuelve a bajarlo.', 'Harrington cerrada si llueve');
+  }
+
+  /* Por dentro o por fuera */
+  if (esCamisa) {
+    add('dentro', 1, capa ? 'Camisa por dentro aunque lleves jersey: así no hace bulto en la cintura ni asoma por el bajo.' : 'Camisa siempre por dentro. Pellizca los costados hacia atrás al meterla para que no haga globo en la cintura.', 'camisa por dentro');
+    if (!capa) add('dentro', 3, 'Alinea la tapeta de la camisa, la hebilla y la bragueta en una sola línea vertical.');
+  } else if (capa) {
+    add('dentro', 2, esCamiseta ? 'Camiseta por dentro del pantalón: que no asome por el bajo del jersey.' : `${base.nombre} por dentro del pantalón, o bien estirado: que no asome por el bajo del jersey ni haga bulto.`,
+      esCamiseta ? 'camiseta por dentro' : null);
+  } else if (esPolo) {
+    add('dentro', 1, `${base.nombre} por fuera si el bajo queda a la altura de media bragueta. Si la tapa entera, por dentro y con el cinturón a la vista.`,
+      'polo por fuera si no pasa de media bragueta');
+  } else if (esCamiseta) {
+    add('dentro', 2, 'Camiseta por fuera, con el bajo a la altura de media bragueta. Nada de meterla a medias.', 'camiseta por fuera');
+  }
+  if (capa && !arriba) add('dentro', 2, 'Jersey siempre por fuera, con el bajo justo sobre el cinturón; si hace bolsa, estíralo para que el canalé del bajo quede ceñido.', 'jersey por fuera, sobre el cinturón');
+
+  /* Cuello */
+  if (capa && esCamiseta) add('cuello', 1, 'Que asome solo 1 cm de cuello de camiseta por encima del jersey, igual por delante que por detrás. Si asoma más, tira de la camiseta hacia abajo.', 'que asome solo 1 cm de camiseta en el cuello');
+  if (capa && esCamisa) add('cuello', 1, 'Cuello de la camisa por fuera del jersey: puntas planas y simétricas sobre el punto, botón de arriba desabrochado.', 'cuello de la camisa por fuera del jersey');
+  if (capa && esPolo) add('cuello', 1, `Cuello del polo por fuera del jersey, con las puntas planas. Abrocha la tapeta para que no se vea por el escote.${bt === 'polo-punto' ? ' Su cuello es blando: dale vapor para que no se doble bajo el jersey.' : ''}`, 'cuello del polo por fuera del jersey');
+  if (!capa && esCamisa) add('cuello', 2, 'Primer botón desabrochado (dos como mucho). Cuello planchado y sin doblarse hacia dentro.', 'primer botón abierto');
+  if (!capa && esPolo) add('cuello', 2, 'Primer botón abierto, cuello bajado y simétrico, nunca levantado.', 'cuello bajado, primer botón abierto');
+  if (!capa && esCamiseta) add('cuello', 3, 'El cuello de la camiseta debe quedar pegado a la base del cuello. Si el canalé está dado de sí, cambia de camiseta.');
+  if (!capa && esCamisa && Lp(base) > 0.85) add('cuello', 2, 'Debajo de una camisa clara, camiseta interior color piel, nunca blanca: la blanca se transparenta.');
+
+  /* Mangas y reloj */
+  if (!capa && mangaCorta) add('mangas', 3, 'La manga corta debe acabar a mitad del bíceps. Si te cae más, dale una vuelta fina de 2 cm.');
+  if (!capa && esCamisa) {
+    if (t && t.tmax != null && t.tmax >= 20) add('mangas', 2, `Con ${Math.round(t.tmax)} °C en Barcelona, arremángate: dos vueltas del ancho del puño, hasta justo debajo del codo. Queda relajado y deja el reloj a la vista.`, 'mangas arremangadas bajo el codo');
+    else add('mangas', 3, 'Puños abrochados. Si llevas reloj, que el puño lo tape a medias; si no cabe, arremanga dos vueltas.');
+  }
+  if (capa && esCamisa) add('mangas', 2, 'Que asome 1 cm de puño de camisa por la manga del jersey.', '1 cm de puño bajo la manga');
+  if (capa && /ribete|detalle blanco/i.test(capa.notas || '')) add('mangas', 2, 'Deja a la vista el detalle blanco de los puños del jersey: no subas las mangas.');
+  else if (capa && /punto inglés|punto ingles/i.test((capa.material || '') + (capa.nombre || ''))) add('mangas', 3, 'Mangas del punto inglés sobre la muñeca: si las subes mucho se dan de sí.');
+  else if (capa && !esCamisa) add('mangas', 3, 'En la oficina puedes subir las mangas del jersey dos dedos por encima de la muñeca para dejar ver el reloj, nunca hasta el codo.');
+  if (!arriba) {
+    const foco = [base, capa, ext, pant].filter(Boolean).find(p => Cp(p) >= CFG.color.saturado);
+    const correa = cintClase === 'marron' ? 'correa de piel marrón' : 'correa negra o de metal';
+    add('mangas', 3, `Si llevas reloj: ${correa}, a juego con el cinturón${hebilla ? `; si es de metal, ${hebilla} como la hebilla` : ''}.${foco ? ` El foco ya es ${foco.nombre.toLowerCase()}: reloj y accesorios discretos.` : ''}`);
+  }
+
+  /* Cinturón */
+  if (!arriba) {
+    const porQue = derby && cintClase === 'marron' ? ', del mismo tono de cuero que los zapatos' : calz.cinturon === 'marron' && cintClase === 'marron' ? ', que repite el marrón del talón' : '';
+    const visible = !capa && (esCamisa || esPolo);
+    const Cn = cintNombre.charAt(0).toUpperCase() + cintNombre.slice(1);
+    if (visible) add('cinturon', 2, `${Cn}${porQue}. Hebilla centrada y punta hasta la primera trabilla; ajústalo sin que frunza el pantalón.`, null);
+    else if (!capa && esCamiseta) add('cinturon', 3, `Aunque la camiseta lo tape, lleva el ${cintNombre}${porQue}: se ve al moverte.`);
+    else add('cinturon', 3, `Aunque no se vea, lleva el ${cintNombre}${porQue}: asoma al sentarte o al quitarte el jersey.`);
+  }
+
+  /* Pantalón y bajo */
+  if (chino && derby) add('bajo', 2, 'Bajo del chino sin pliegues: que roce el empeine del zapato, sin quiebre o con uno mínimo.', 'chino sin pliegues sobre el zapato');
+  else if (chino && zapatilla && calz.volumen === 'robusto') add('bajo', 2, 'Con suela gruesa, bajo recto rozando la lengüeta y sin vuelta ancha: equilibra el volumen del pie.', 'bajo recto rozando la lengüeta');
+  else if (chino && zapatilla) add('bajo', 2, 'Bajo al tobillo o con una vuelta fina de 3 cm, sin que se amontone sobre la zapatilla.', 'bajo del chino al tobillo o con una vuelta fina');
+  if (vaquero) add('bajo', 2, 'Vaqueros con una vuelta fina de 2–3 cm si te sobra largo; que no se acumulen sobre el calzado.', 'vuelta fina en el vaquero');
+  if (chino) add('bajo', 3, 'Chino planchado pero sin raya marcada. Bolsillos sin bultos: móvil y llaves, a la mochila.');
+
+  /* Calcetín y calzado */
+  if (calc) {
+    const blanco = fam(calc) === 'blanco';
+    if (blanco && vaquero && zapatilla) add('pies', 3, 'Calcetín blanco limpio y sin logos, que asome solo un dedo sobre la zapatilla.');
+    else if (!blanco && fam(calc) === fam(pant)) add('pies', 3, `Calcetín ${fam(calc)} como el pantalón: alarga la pierna. De media caña, que al sentarte no se vea piel.`);
+    else if (!blanco) add('pies', 3, `Calcetín ${fam(calc)}${Lp(calc) <= Lp(pant) ? ', más oscuro que el pantalón: correcto' : ''}. De media caña, que al sentarte no se vea piel.`);
+  }
+  if (arriba) { /* sin calzado */ } else if (derby) {
+    add('pies', 3, 'Cepilla el aspecto ante en una sola dirección antes de salir. Cordones ajustados y lazo pequeño, sin puntas colgando.');
+    if (llueve) add('pies', 2, 'Hoy llueve: el aspecto ante se mancha. Si puedes, cámbialos por una zapatilla de piel lisa.', 'ojo con la lluvia y el ante');
+  } else if (calz.id === 'vans' || /lona/i.test(calz.material || '')) {
+    add('pies', 3, 'Cordones en paralelo y bien tensos; la lona, sin manchas.');
+    if (llueve) add('pies', 2, 'Hoy llueve y la lona cala: mejor una zapatilla de piel lisa.', 'la lona cala con lluvia');
+  } else if (zapatilla) {
+    const claras = Lp(calz) > 0.75 || (calz.hex2 && oklab(calz.hex2).L > 0.75);
+    add('pies', 3, claras ? 'Suela y piel limpias: pasa una toallita antes de salir. El blanco sucio resta más que cualquier color.' : 'Cordones tensos y lengüeta centrada.');
+  }
+
+  /* Antes de salir */
+  if (/arruga/i.test(base.notas || '') || /lino/i.test(base.material || '')) add('antes', 2, `${base.nombre}: arruga algo. Un minuto de vapor antes de ponértelo.`, 'vapor al polo antes de salir');
+  if (esCamisa) add('antes', 3, capa ? 'Con jersey solo se ven cuello y puños de la camisa: plánchalos bien.' : 'Camisa planchada, sobre todo cuello, tapeta y puños.');
+  const merino = [capa].filter(Boolean).find(p => /merino/i.test(p.material || ''));
+  if (merino) add('antes', 3, 'Revisa que el merino no tenga bolitas en axilas y costados; si las tiene, quitapelusas.');
+  if ([base, capa, ext, pant].filter(Boolean).some(p => Lp(p) < 0.3)) add('antes', 3, 'Rodillo quitapelusas a lo oscuro: en negro y marino se ve todo.');
+
+  let lista = r;
+  if (opc && opc.video) lista = r.filter(x => TOQUES_VIDEO.includes(x.g));
+  const orden = Object.fromEntries(TOQUES_GRUPOS.map(([k], i) => [k, i]));
+  return lista.sort((a, b) => a.p - b.p || orden[a.g] - orden[b.g]);
+}
+// Los dos toques clave para la tarjeta (versión corta)
+function toquesClave(lista, n) { return lista.filter(x => x.c).slice(0, n || 2).map(x => x.c); }
+
+/* Frase de estilista: por qué funciona + los dos toques clave */
+function fraseEstilista(o, M, ev, ctx) {
   const buena = ev.notas.filter(n => n.ajuste > 0 && ['par', 'cuello', 'complejidad', 'luz', 'calzado', 'estructura'].includes(n.regla))[0];
   const pega = ev.notas.filter(n => n.ajuste < 0 && n.ambito === 'estilo' && n.regla !== 'tope')[0];
-  const tips = [];
-  if (base.tipo === 'camisa') tips.push('camisa por dentro');
-  if (capa && (base.tipo === 'camisa' || base.tipo === 'polo' || base.tipo === 'polo-punto')) tips.push('cuello por fuera del jersey');
-  if (capa && base.tipo === 'camiseta') tips.push('que asome solo un dedo de camiseta en el cuello');
-  if (!capa && base.tipo === 'polo-punto') tips.push('polo por fuera si no pasa de media bragueta');
-  // Cinturón: solo si se ve (sin jersey y con la base por dentro o pudiendo ir por dentro)
-  if (!o.cinturon && !capa && base.tipo !== 'camiseta') tips.push(cinturonPara(calz, pant) + (base.tipo === 'camisa' ? '' : ' si se ve'));
-  if (pant.tipo === 'chino') tips.push(calz.tipo === 'derby' ? 'chino sin pliegues sobre el zapato' : 'bajo del chino al tobillo o con una vuelta fina');
-  const t = ctx && ctx.tiempo, u = (ctx && ctx.umbrales) || AJUSTES_BASE.umbrales;
-  if (t && t.ts != null && t.tmax != null && Math.abs(t.tmax - t.ts) > u.difTrayecto && (capa || ext)) tips.unshift(ext ? 'cazadora fuera al llegar a Barcelona' : 'jersey fuera al llegar a Barcelona');
   const porque = buena ? buena.texto : (ev.nota >= CFG.veredicto.pega ? 'Combinación limpia y sin riesgos' : 'Correcto, sin más');
   const matiz = pega && ev.nota < CFG.veredicto.pega + 6 ? ` Ojo: ${pega.texto.charAt(0).toLowerCase() + pega.texto.slice(1)}.` : '';
-  const como = tips.slice(0, 2);
+  const como = toquesClave(toquesFinales(o, M, ctx));
   return porque + '.' + matiz + (como.length ? ' ' + como[0].charAt(0).toUpperCase() + como.join(', ').slice(1) + '.' : '');
 }
 
@@ -1871,6 +2015,55 @@ function runTests(silencioso) {
       v5.prendas.find(p => p.id === 'vans').notas = 'Solo casual';
       const m6 = corregirDatos(v5), Mm6 = mapa(m6.prendas);
       ok('Migración a la V3.7: entran los dos cinturones y las Vans dejan de ser «solo casual»', m6.datosV === DATOS_V && Mm6['cint-marron'] && Mm6['cint-negro'] && !/Solo casual/.test(Mm6['vans'].notas));
+    }
+
+    // 2. Toques finales (V3.8)
+    {
+      const inv8 = clonar(INVENTARIO_BASE), M8 = mapa(inv8);
+      const o8 = (b, c, e, p, z, s, k) => ({ base: b, capa: c, exterior: e, pantalon: p, calzado: z, calcetin: s, cinturon: k });
+      const tq = (o, ctx, opc) => toquesFinales(o, M8, ctx || { tiempo: { ts: 14, tmax: 19, lluvia: 0 } }, opc);
+      const grupos = new Set(TOQUES_GRUPOS.map(x => x[0]));
+      // Todas las propuestas de varios días: al menos 5 toques, grupos válidos, sin repetir y con 2 clave para la tarjeta
+      let n = 0, malos = [];
+      for (const [ts, tmax, lluvia] of [[6, 16, 0], [12, 22, 0], [16, 24, 70], [21, 28, 0]]) {
+        for (const x of proponer(inv8, { tiempo: { ts, tmax, lluvia }, tipoDia: 'normal', mes: 11 }, 3).propuestas) {
+          n++; const l = tq(x.o, { tiempo: { ts, tmax, lluvia } });
+          if (l.length < 5 || l.some(t => !grupos.has(t.g) || !t.t) || new Set(l.map(t => t.t)).size !== l.length || toquesClave(l).length < 2) malos.push(claveOutfit(x.o));
+        }
+      }
+      ok('Toques finales: cada propuesta tiene 5 o más, en su grupo, sin repetir y con 2 clave', n > 0 && !malos.length, `${n} propuestas${malos.length ? ' · fallan: ' + malos.slice(0, 2).join(' / ') : ''}`);
+      // Camiseta bajo jersey: 1 cm de cuello, camiseta por dentro, jersey por fuera
+      const lc = tq(o8('u-supima', 'u-merino-rojo', null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris', 'cint-marron'));
+      ok('Camiseta bajo jersey: asoma 1 cm de cuello (clave) y va por dentro', lc.some(t => t.g === 'cuello' && t.p === 1 && /1 cm/.test(t.t)) && lc.some(t => t.g === 'dentro' && /Camiseta por dentro/.test(t.t)));
+      ok('Jersey rojo: avisa de que es el foco y pide accesorios discretos', lc.some(t => /foco ya es jersey merino rojo/i.test(t.t)));
+      // Camisa sola: por dentro (clave); con calor, arremangada
+      const lcs = tq(o8('camisa-celeste', null, null, 'ch-marino', 'zap-derby-cognac', 'calc-negro', 'cint-marron'), { tiempo: { ts: 18, tmax: 23, lluvia: 0 } });
+      ok('Camisa sola: por dentro como toque clave, cinturón a la vista y arremangada con 20 °C o más', lcs[0].g === 'dentro' && lcs[0].p === 1 && /Cinturón marrón de ante, del mismo tono de cuero/.test(lcs.find(t => t.g === 'cinturon').t) && lcs.some(t => /arremángate/i.test(t.t)));
+      // Camisa con jersey TH: cuello por fuera, puño 1 cm, ribete blanco a la vista
+      const lth = tq(o8('camisa-blanca', 'jer-marino', null, 'ch-gris', 'zap-derby-cognac', 'calc-gris', 'cint-marron'));
+      ok('Camisa con jersey Tommy Hilfiger: cuello por fuera, 1 cm de puño y detalle blanco a la vista', ['Cuello de la camisa por fuera del jersey', '1 cm de puño', 'detalle blanco'].every(k => lth.some(t => t.t.includes(k))));
+      // Trayecto con más de 8 °C de diferencia: primer toque, quitarse la cazadora
+      const ltr = tq(o8('z-celeste', null, 'u-harrington', 'ch-gris', 'u740', 'calc-gris', 'cint-negro'), { tiempo: { ts: 9, tmax: 21, lluvia: 0 } });
+      ok('Más de 8 °C entre Manresa y Barcelona: el primer toque es quitarse la cazadora', ltr[0].g === 'trayecto' && /cazadora/.test(ltr[0].t) && /9 °C.*21 °C/.test(ltr[0].t));
+      ok('Polo celeste: vapor antes de salir (arruga algo)', ltr.some(t => t.g === 'antes' && /vapor/.test(t.t)));
+      // Zapatilla blanco roto: cinturón marrón que repite el talón; suela gruesa: bajo recto
+      const lzc = tq(o8('polo-marino', null, null, 'ch-beige', 'zap-crudo', 'calc-gris', 'cint-marron'));
+      const lzb = tq(o8('polo-marino', null, null, 'ch-gris', 'zap-blanca', 'calc-gris', 'cint-negro'));
+      ok('Zapatilla blanco roto: el cinturón marrón repite el talón', lzc.some(t => /repite el marrón del talón/.test(t.t)));
+      ok('Zapatilla de suela gruesa con chino: bajo recto, sin vuelta ancha', lzb.some(t => t.g === 'bajo' && /suela gruesa/.test(t.t)));
+      // Lluvia con derbys: aviso
+      const llu = tq(o8('z-tostado', null, null, 'ch-marino', 'zap-derby-cognac', 'calc-negro', 'cint-marron'), { tiempo: { ts: 14, tmax: 18, lluvia: 80 } });
+      ok('Lluvia con derbys de aspecto ante: aviso en calzado', llu.some(t => t.g === 'pies' && /llueve/.test(t.t)));
+      // Probador sin cinturón: propone el que toca; nunca negro con derbys
+      const lpr = tq(o8('polo-negro', null, null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris', null));
+      ok('Sin cinturón elegido: propone el marrón con derbys', /cinturón marrón de ante/i.test(lpr.find(t => t.g === 'cinturon').t));
+      // Videollamada: solo arriba
+      const lv = tq({ base: 'camisa-blanca', capa: 'jer-gris', exterior: null, pantalon: null, calzado: null, calcetin: null }, null, { video: true });
+      ok('Videollamada: solo toques de la parte de arriba', lv.length >= 2 && lv.every(t => TOQUES_VIDEO.includes(t.g)));
+      // La tarjeta muestra como mucho 2 toques
+      const ev8 = evaluar(o8('u-supima', 'u-merino-rojo', null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris', 'cint-marron'), M8, {});
+      const fr = fraseEstilista(o8('u-supima', 'u-merino-rojo', null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris', 'cint-marron'), M8, ev8, { tiempo: { ts: 14, tmax: 19, lluvia: 0 } });
+      ok('La tarjeta enseña los 2 toques clave (empieza por el cuello de 1 cm)', /Que asome solo 1 cm de camiseta en el cuello, /.test(fr), fr);
     }
   } catch (err) {
     ok('Error al ejecutar los tests', false, String(err && err.stack || err));
@@ -2241,10 +2434,28 @@ function tarjeta(c, i, Mp, ctx, usoHoy) {
         ${!UI.video && c.estilo != null ? `<div class="subnotas"><span>Estilo <b>${c.estilo}</b></span><span>Contexto <b>${c.contexto}</b></span></div>` : ''}</div></div>
     <ul class="pieces">${piezas}</ul>${avisoFijas}${avisoQuieroTiempo(c, Mp, ctx, Q)}
     <p class="frase">${esc(frase)}</p>
+    ${botonToques(toquesFinales(c.o, Mp, ctx, { video: UI.video }).length, `data-i="${i}"`)}
     <div class="actions">${puesto ? `<button class="btn" type="button" data-act="deshacer-uso">Puesto ✓ · Deshacer</button>` : `<button class="btn primary" type="button" data-act="melopongo" data-i="${i}">Me lo pongo</button>`}
       <button class="btn" type="button" data-act="otra" data-i="${i}">Otra propuesta</button></div>
     ${UI.video ? '' : `<button class="linkbtn nomeconvence" type="button" data-act="nomeconvence" data-i="${i}">No me convence</button>`}
   </article>`;
+}
+/* Toques finales: botón de la tarjeta y hoja con todos los detalles */
+function botonToques(n, attrs) {
+  if (!n) return '';
+  return `<button class="toques-btn" type="button" data-act="toques" ${attrs}><span class="tq-ico" aria-hidden="true">✦</span><span>Toques finales</span><span class="tq-n">${n}</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></button>`;
+}
+function hojaToques(o, Mp, ctx, titulo, video) {
+  const lista = toquesFinales(o, Mp, ctx, { video });
+  const nombres = HUECOS.filter(x => o[x.k] && Mp[o[x.k]] && (!video || x.k === 'base' || x.k === 'capa')).map(x => Mp[o[x.k]]);
+  let h = `<div class="sheet-head"><div><div class="eyebrow">${esc(titulo)}</div><h2>Toques finales</h2></div><button class="btn sm ghost" type="button" data-act="cerrar">Cerrar</button></div>
+  <div class="chips tq-piezas">${nombres.map(p => `<span class="chip static">${dotHTML(p)}<span>${esc(p.nombre)}</span></span>`).join('')}</div>`;
+  for (const [g, label] of TOQUES_GRUPOS) {
+    const del = lista.filter(x => x.g === g);
+    if (!del.length) continue;
+    h += `<section class="tq-grupo"><h3>${esc(label)}</h3><ul class="tq-lista">${del.map(x => `<li class="${x.p === 1 ? 'clave' : ''}">${x.p === 1 ? '<b class="tq-clave">Clave</b>' : ''}<span>${esc(x.t)}</span></li>`).join('')}</ul></section>`;
+  }
+  return h + `<p class="small muted">Las marcadas como «Clave» son las que más se notan. Lo del reloj solo aplica si llevas.</p>`;
 }
 function avisoQuieroTiempo(c, Mp, ctx, Q) {
   if (UI.video || !Object.keys(Q).length || !ctx || !ctx.tiempo) return '';
@@ -2326,6 +2537,7 @@ function vistaProbador() {
       ${suma.length ? `<div class="stack"><h3>Lo que suma</h3><ul class="notes">${suma.map(n => `<li class="plus"><span class="g">+${n.ajuste}</span><span>${esc(n.texto)}</span></li>`).join('')}</ul></div>` : ''}
       ${resta.length ? `<div class="stack"><h3>Lo que resta</h3><ul class="notes">${resta.map(n => `<li class="minus${n.duro ? ' duro' : ''}"><span class="g">${n.duro ? '✕' : n.ajuste}</span><span>${n.duro ? 'Regla incumplida: ' : ''}${esc(n.texto)}</span></li>`).join('')}</ul></div>` : ''}
       ${!suma.length && !resta.length ? '<p class="muted">Correcto, sin nada que destacar.</p>' : ''}
+      ${botonToques(toquesFinales(o, Mp, { tiempo: t, umbrales: S.ajustes.umbrales }).length, 'data-probador="1"')}
       ${mejOk ? (() => { const hu = HUECOS.find(x => x.k === mej.hueco); const nuevo = mej.id ? `«${Mp[mej.id].nombre}»` : hu.sin.toLowerCase(); const viejo = o[mej.hueco] ? `«${Mp[o[mej.hueco]].nombre}»` : hu.sin.toLowerCase();
         const accion = !o[mej.hueco] ? `añade ${esc(nuevo)}` : !mej.id ? `quita ${esc(viejo)}` : `cambia ${esc(viejo)} por ${esc(nuevo)}`;
         return `<div class="suggest"><span><b>Mejor mejora:</b> ${accion} y sube a <b>${mej.nota}</b>.</span><button class="btn accent" type="button" data-act="aplicar" data-h="${mej.hueco}" data-id="${mej.id || ''}">Aplicar</button></div>`; })() : ''}
@@ -2627,6 +2839,12 @@ const ACT = {
   },
   'quiero-borrar'() { delete S.quiero[fechaVista()]; guardar(); recalcularHoy(); cerrarHoja(); render(); toast('La app vuelve a elegir libremente'); },
   'soltar-todo'(el) { const fk = claveFijas(); if (UI.fijas[fk]) UI.fijas[fk][+el.dataset.i] = {}; render(); toast('Piezas soltadas: la app vuelve a elegir libremente'); },
+  toques(el) {
+    const Mp = M();
+    if (el.dataset.probador) return abrirHoja(hojaToques(S.probador, Mp, { tiempo: tiempoPara(hoyISO()), umbrales: S.ajustes.umbrales }, 'Probador', false));
+    const i = +el.dataset.i, c = UI.cards[i];
+    abrirHoja(hojaToques(c.o, Mp, ctxPara(fechaVista(), UI.tipoDia), `Propuesta ${i + 1}`, UI.video));
+  },
   melopongo(el) { const c = UI.cards[+el.dataset.i]; registrarUso(c.o, UI.video ? 'videollamada' : UI.tipoDia); },
   'deshacer-uso'() { const f = fechaVista(); S.usos = S.usos.filter(u => u.fecha !== f); guardar(); render(); },
   nomeconvence(el) {

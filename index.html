@@ -283,8 +283,13 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V3.5';
+const VERSION = 'V3.6';
 const CAMBIOS = {
+  'V3.6': [
+    'Regla obligatoria nueva: cada prenda de arriba (camiseta, polo o camisa; jersey; cazadora) tiene que combinar por sí sola con el pantalón y con el calzado. Da igual si llevas una, dos o tres capas: si te quitas la cazadora o el jersey, lo que queda sigue combinando.',
+    'Ejemplos que dejan de salir: polo oliva con chino marino aunque lleves la cazadora beige encima; polo negro bajo un jersey con chino marino; Harrington marino con chino marino.',
+    'En «Probar», si una capa no combina, te dice cuál, con qué y en qué momento (sin la cazadora o sin capas encima).'
+  ],
   'V3.5': [
     'Armario al día (01-11-2026): entra el jersey de punto inglés marrón de Zara y tres zapatillas (negra de suela blanca, blanca con talón negro y blanco roto con talón marrón). El polo de punto marrón oscuro pasa al archivo porque lo devolviste; tu historial se conserva.',
     'Reglas de las zapatillas nuevas: la blanco roto es la más arreglada y siempre va con el cinturón marrón; la negra, mejor con vaqueros o chino negro o gris; la blanca, comodín. Ninguna es de lona ni de ante, así que la lluvia no las penaliza.',
@@ -362,7 +367,8 @@ const CONFIG = {
      «Motor de compatibilidad de outfits masculinos»).
      Principios:
      1. El outfit se juzga entero (complejidad de paleta, focos, capas), no como suma de parejas.
-     2. Reglas obligatorias pocas y funcionales o de contexto. El color es regla suave y condicionada.
+     2. Reglas obligatorias pocas y funcionales o de contexto. El color es regla suave y condicionada,
+        salvo una: cada capa de arriba (base, jersey, cazadora) tiene que combinar con el pantalón y el calzado (V3.6).
      3. El color se mide (OKLCH: luminosidad L, croma C, tono h), no se adivina por el nombre.
      4. Dos notas separadas: Estilo (estética) y Contexto (tiempo, tipo de día, rotación, tus gustos).
      Todos los umbrales son hipótesis de partida, calibradas con los casos de prueba de runTests().
@@ -439,8 +445,26 @@ const CONFIG = {
     { a: 'marrón', b: 'vaquero', v: 'muy', texto: 'El marrón le sienta muy bien al vaquero' },
     { a: 'gris', b: 'beige', v: 'ok', texto: 'Gris y beige: neutros' },
     { a: 'vaquero', b: 'beige', v: 'ok', texto: 'Vaquero y beige: casual cálido' },
-    { a: 'vaquero', b: 'gris', v: 'ok', texto: 'Vaquero y gris' }
+    { a: 'vaquero', b: 'gris', v: 'ok', texto: 'Vaquero y gris' },
+    // V3.6: completan la matriz para que toda pareja del armario tenga veredicto
+    { a: 'negro', b: 'vaquero', v: 'ok', texto: 'Negro y vaquero: básico casual' },
+    { a: 'negro', b: 'granate', v: 'ok', texto: 'Granate y negro: sobrio' },
+    { a: 'negro', b: 'azul cielo', v: 'ok', texto: 'Celeste y negro: contraste limpio' },
+    { a: 'negro', b: 'verde', v: 'ok', texto: 'Oliva y negro: sobrio' },
+    { a: 'azul cielo', b: 'vaquero', v: 'ok', texto: 'Celeste y vaquero: casual clásico' }
   ],
+  /* ---------- [OBLIGATORIA] Cada capa de arriba con el pantalón y el calzado (Eric, 02-11-2026) ----------
+     Camiseta/polo/camisa, jersey y cazadora se comprueban UNO A UNO contra el pantalón y contra el calzado,
+     tal y como quedarían al quitarte las capas de encima (sin cazadora; sin cazadora ni jersey).
+     Con el pantalón «no combina» si: la pareja de la matriz sale negativa en ese estado, es de colores sin regla,
+     o son dos oscuros casi iguales / el mismo color sin contraste de textura.
+     Con el calzado «no combina» si: rojo y verde saturados o colores sin regla (el calzado responde sobre todo al pantalón).
+     El calzado del mismo color que una prenda de arriba es repetición útil, no choque. */
+  capaAbajo: {
+    ajuste: -10,
+    estado: { base: 'sin capas encima', capa: 'sin la cazadora' },
+    sinRegla: 'colores sin regla de combinación todavía'
+  },
   muyBuena: 5, correcta: 2,
   blanco: { ajuste: 2, texto: 'El blanco va con casi todo' },
   tonal: { dL: 0.15, ajuste: 2, texto: 'Tonal con contraste de luminosidad' },
@@ -847,6 +871,53 @@ function ocasionDe(o, M) {
   return media >= 3.75 ? 'Business casual' : media >= 2.9 ? 'Smart casual' : 'Casual';
 }
 
+/* ---------- [OBLIGATORIA] Capas de arriba × pantalón y calzado ----------
+   Devuelve la lista de choques [{capa, con, texto}]. Vacía = cada capa combina con pantalón y calzado. */
+function veredictoArribaPantalon(x, pant, enEstado) {
+  const C = CFG, fx = famPar(x), fy = famPar(pant);
+  const CI = C.color.casiIgual, MC = C.color.mismoColor;
+  const d = dE(x, pant), mismaFam = famColor(x) === famColor(pant), tex = contrasteTextura(x, pant);
+  const apagadoConNegro = (famColor(x) === 'negro' && Cp(pant) < CI.cromaApagado) || (famColor(pant) === 'negro' && Cp(x) < CI.cromaApagado);
+  if (!tex && d < MC.dE && mismaFam) return 'mismo color sin contraste de textura';
+  if (!tex && d < CI.dE && Math.abs(Lp(x) - Lp(pant)) < CI.dL && Math.max(Lp(x), Lp(pant)) < CI.Lmax && (mismaFam || apagadoConNegro)) return 'dos oscuros casi iguales';
+  if (fx === fy || fx === 'blanco' || fy === 'blanco') return null;
+  const r = PARES.get(parKey(fx, fy));
+  if (!r) return C.capaAbajo.sinRegla;
+  if (r.v !== 'cond') return null;
+  if (r.cond === 'dL') return Math.abs(Lp(x) - Lp(pant)) >= r.min || r.no >= 0 ? null : r.textoNo.split(':')[0].toLowerCase();
+  if (r.cond === 'claro') return enEstado.some(p => Lp(p) >= 0.70) ? null : r.textoNo.toLowerCase();
+  if (r.cond === 'navidad') return Math.max(Cp(x), Cp(pant)) >= C.color.saturado ? r.texto.toLowerCase() : null;
+  if (r.cond === 'marronClaro') { const mr = fx === 'marrón' ? x : pant; return Lp(mr) > r.min ? r.textoNo.toLowerCase() : null; }
+  return null;
+}
+function veredictoArribaCalzado(x, calz) {
+  const C = CFG, fx = famPar(x), fy = famPar(calz);
+  if (fx === fy || fx === 'blanco' || fy === 'blanco') return null;
+  const r = PARES.get(parKey(fx, fy));
+  if (!r) return C.capaAbajo.sinRegla;
+  if (r.cond === 'navidad') return Math.max(Cp(x), Cp(calz)) >= C.color.saturado ? r.texto.toLowerCase() : null;
+  return null;   // el cognac con negro choca cuando el negro es el pantalón (regla de calzado), no arriba con un pantalón en medio; el resto de condiciones son de prendas grandes en contacto; el calzado marrón con granate, oliva o marino va bien
+}
+function choquesCapaAbajo(o, M) {
+  const base = M[o.base], capa = o.capa ? M[o.capa] : null, ext = o.exterior ? M[o.exterior] : null;
+  const pant = M[o.pantalon], calz = M[o.calzado];
+  if (!base || !pant || !calz) return [];
+  const E = CFG.capaAbajo.estado, res = [];
+  // Cada capa se juzga como quedaría siendo la de fuera: con lo que lleva debajo y el pantalón
+  const capas = [{ p: base, rol: 'base', estado: [base, pant] }];
+  if (capa) capas.push({ p: capa, rol: 'capa', estado: [base, capa, pant] });
+  if (ext) capas.push({ p: ext, rol: 'exterior', estado: [base, capa, ext, pant].filter(Boolean) });
+  const hayEncima = rol => rol === 'base' ? !!(capa || ext) : rol === 'capa' ? !!ext : false;
+  for (const c of capas) {
+    const cuando = hayEncima(c.rol) ? ` (${E[c.rol]})` : '';
+    const mp = veredictoArribaPantalon(c.p, pant, c.estado);
+    if (mp) res.push({ capa: c.p.id, con: pant.id, texto: `${c.p.nombre} no combina con ${pant.nombre.toLowerCase()}: ${mp}${cuando}` });
+    const mc = veredictoArribaCalzado(c.p, calz);
+    if (mc) res.push({ capa: c.p.id, con: calz.id, texto: `${c.p.nombre} no combina con ${calz.nombre.toLowerCase()}: ${mc}${cuando}` });
+  }
+  return res;
+}
+
 /* ---------- Evaluación ----------
    o: {base, capa, exterior, pantalon, calzado, calcetin} (ids)
    M: mapa id → prenda
@@ -903,6 +974,9 @@ function evaluar(o, M, ctx) {
       add(tex ? CI.ajusteTextura : CI.ajuste, `${x.nombre} y ${y.nombre.toLowerCase()}: dos oscuros casi iguales ${CI.texto}`, 'casiIgual');
     }
   }
+
+  /* 2b. [OBLIGATORIA] Cada capa de arriba combina con el pantalón y con el calzado, también al quitarte capas */
+  for (const f of choquesCapaAbajo(o, M)) add(C.capaAbajo.ajuste, f.texto, 'capaAbajo', true);
 
   /* 3. Todo oscuro (prendas grandes) */
   const TO = C.color.todoOscuro;
@@ -1413,7 +1487,7 @@ const CASOS_INFORME = [
   [22, 'D', 't-polo-gris', 'jer-gris', null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris', 'normal'],
   [23, 'R', 'u-supima', 'u-merino-rojo', null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],   // A en el informe en parte por la camiseta bajo jersey en oficina; Eric la permite
   [24, 'A', 'z-marron', 'u-merino-rojo', null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
-  [25, 'R', 'polo-verde', null, 'caz-beige', 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
+  [25, 'I', 'polo-verde', null, 'caz-beige', 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],   // el informe lo daba por bueno; Eric (02-11-2026): sin la cazadora, oliva y marino no combinan
   [26, 'A', 'cam-negra', null, null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],   // el informe lo vetaba en oficina; Eric lo permite
   [27, 'A', 'polo-negro', null, null, 'vaqueros', 'vans', 'calc-blanco', 'casual'],
   [28, 'D', 'u-supima', 'jer-marino', null, 'ch-negro', 'u740', 'calc-negro', 'normal'],
@@ -1628,6 +1702,46 @@ function runTests(silencioso) {
         mig.usos[0].ids[0] === 'z-marron' && mig.probador.base !== 'z-marron' && mig2.prendas.length === mig.prendas.length,
         `${mig.prendas.length} prendas (${mig.prendas.filter(p => !p.archivada).length} activas)`);
       ok('Una prenda archivada nunca aparece en HOY', !proponer(mig.prendas, { tiempo: { ts: 12, tmax: 19, lluvia: 0 }, tipoDia: 'normal', mes: 11 }, 3).lista.some(x => Object.values(x.o).includes('z-marron')));
+    }
+
+    // 7. V3.6 · [OBLIGATORIA] cada capa de arriba combina con pantalón y calzado (Eric, 02-11-2026)
+    {
+      const arriba = inv.filter(p => ['base', 'capa', 'exterior'].includes(p.hueco)), abajo = inv.filter(p => p.hueco === 'pantalon'), zaps = inv.filter(p => p.hueco === 'calzado');
+      let sinRegla = [];
+      for (const a of arriba) for (const b of abajo.concat(zaps)) {
+        const fa = famPar(a), fb = famPar(b);
+        if (fa !== fb && fa !== 'blanco' && fb !== 'blanco' && !PARES.get(parKey(fa, fb))) sinRegla.push(`${fa}+${fb}`);
+      }
+      sinRegla = [...new Set(sinRegla)];
+      ok('Toda pareja de colores arriba × pantalón/calzado del armario tiene veredicto', !sinRegla.length, sinRegla.join(', ') || `${arriba.length} prendas de arriba × ${abajo.length + zaps.length} de abajo`);
+
+      // Todas las combinaciones válidas (no solo el top 3), en 1, 2 y 3 capas, con lluvia y sin ella
+      let comb = 0, malas = 0, porCapas = { 1: 0, 2: 0, 3: 0 }, ejemplo = '';
+      // «casual» es el día más permisivo (incluye lo que vale en «normal» y «reunión»); 3 °C da 3 capas, 17 °C 1-2 y 22 °C una
+      for (const ts of [3, 17, 22]) {
+        const lista = generar(clonar(INVENTARIO_BASE), { tiempo: { ts, tmax: ts + 7, lluvia: 0 }, tipoDia: 'casual', mes: 11 });
+        for (const x of lista) {
+          comb++;
+          porCapas[1 + (x.o.capa ? 1 : 0) + (x.o.exterior ? 1 : 0)]++;
+          // Quitándose capas: sin cazadora y sin cazadora ni jersey
+          const estados = [x.o, Object.assign({}, x.o, { exterior: null }), Object.assign({}, x.o, { exterior: null, capa: null })];
+          const ch = estados.map(e => choquesCapaAbajo(e, M)).find(c => c.length);
+          if (ch) { malas++; ejemplo = ejemplo || ch[0].texto; }
+        }
+      }
+      ok('Ninguna combinación válida tiene una capa de arriba que no combine con pantalón o calzado', malas === 0 && porCapas[1] && porCapas[2] && porCapas[3],
+        malas ? ejemplo : `${comb} combinaciones · 1 capa ${porCapas[1]} · 2 capas ${porCapas[2]} · 3 capas ${porCapas[3]}`);
+
+      const dura = (o, txt) => { const e = evaluar(o, M); return { e, si: e.veredicto === 'No pega' && e.notas.some(n => n.regla === 'capaAbajo' && n.duro && (!txt || n.texto.includes(txt))) }; };
+      const c1 = dura(o6('polo-verde', null, 'caz-beige', 'ch-marino', 'zap-derby-oscuro', 'calc-negro'), 'sin capas encima');
+      ok('Polo oliva + cazadora beige + chino marino: «No pega» porque sin la cazadora no combinan', c1.si, `${c1.e.nota} · ${c1.e.reglas[0] || ''}`);
+      const c2 = dura(o6('polo-negro', 'jer-gris', null, 'ch-marino', 'u740', 'calc-negro'), 'sin capas encima');
+      ok('Polo negro bajo jersey gris con chino marino: «No pega» (al quitarte el jersey, dos oscuros casi iguales)', c2.si, `${c2.e.nota} · ${c2.e.reglas[0] || ''}`);
+      const c3 = dura(o6('u-supima', 'jer-gris', 'u-harrington', 'ch-marino', 'u740', 'calc-negro'), 'Harrington');
+      ok('Harrington marino con chino marino: «No pega» aunque debajo todo combine', c3.si, `${c3.e.nota} · ${c3.e.reglas[0] || ''}`);
+      const c4 = dura(o6('u-supima', 'u-merino-rojo', null, 'ch-gris', 'zap-derby-oscuro', 'calc-gris'));
+      const c5 = dura(o6('camisa-blanca', 'jer-marino', null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro'));
+      ok('Sí combinan: merino rojo con derby marrón oscuro; jersey marino con chino marino (contraste punto-sarga)', !c4.si && !c5.si, `${c4.e.nota} · ${c5.e.nota}`);
     }
   } catch (err) {
     ok('Error al ejecutar los tests', false, String(err && err.stack || err));

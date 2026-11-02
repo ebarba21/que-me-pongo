@@ -131,6 +131,9 @@ main.view { max-width: 600px; margin: 0 auto; padding: 14px max(16px, var(--sar)
 .chip.meh { opacity: .6; }
 .tag-fija { color: var(--accent); font-weight: 700; }
 .piece.fija .pn { font-weight: 600; }
+.quiero .quiero-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.quiero .chips { margin-top: 10px; }
+.aviso-quiero { margin: -2px 0 0; }
 .fijas-info { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 8px; font-size: .85rem; color: var(--soft); margin-top: -4px; }
 .fijas-info .fijas-btns { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .fijas-info .btn.sm { white-space: nowrap; }
@@ -283,8 +286,15 @@ nav.tabs button[aria-current="page"] { color: var(--accent); }
    Determinista y explicable. Nota = puntosBase + suma de ajustes, limitada a 0–100.
    Todo lo ajustable (pesos, umbrales, textos) está en CONFIG.
    ========================================================== */
-const VERSION = 'V3.6';
+const VERSION = 'V3.7';
 const CAMBIOS = {
+  'V3.7': [
+    'Cinturones en el outfit: el marrón de ante y el negro son prendas del armario y cada propuesta lleva el que toca (marrón con derbys y con la zapatilla blanco roto; con zapatilla, negro con chino negro, gris o marino y marrón con chino beige o vaqueros). Se pueden cambiar con «Elegir» y probar en el Probador. Negro con zapato marrón: nunca.',
+    '«Quiero ponerme…» en HOY: eliges una o varias prendas (una por hueco) y las tres propuestas se montan a su alrededor. Manda tu elección aunque el tiempo diga otra cosa (te avisa), pero nunca se salta las reglas de combinar.',
+    'Todas las prendas valen igual: el día por defecto es «Libre», sin objetivo de formalidad. Ni las camisas suben ni las Vans bajan; solo cuenta si el outfit combina (color, material, formalidad entre las prendas, proporción y capas). «Reunión» y «Casual» quedan para cuando tú los elijas.',
+    'Todos los zapatos suman lo mismo con su pareja buena; ninguno resta por no ir con su favorita. Las Vans ya no restan con chino gris, beige o marino.',
+    'Formalidad incompatible desde 3,5 puntos efectivos (camisa con Vans, el ejemplo del inventario, ya no se cuela).'
+  ],
   'V3.6': [
     'Regla obligatoria nueva: cada prenda de arriba (camiseta, polo o camisa; jersey; cazadora) tiene que combinar por sí sola con el pantalón y con el calzado. Da igual si llevas una, dos o tres capas: si te quitas la cazadora o el jersey, lo que queda sigue combinando.',
     'Ejemplos que dejan de salir: polo oliva con chino marino aunque lleves la cazadora beige encima; polo negro bajo un jersey con chino marino; Harrington marino con chino marino.',
@@ -495,52 +505,51 @@ const CONFIG = {
   formalidad: {
     // Lo oscuro y liso es más formal; lo claro, menos (Permanent Style). No se aplica a camisas.
     oscuro: 0.40, ajusteOscuro: 0.25, claro: 0.80, ajusteClaro: -0.25,
-    rango: { suave: 3, ajuste: -12, duro: 4, texto: 'Mucha distancia de formalidad entre prendas', textoDuro: 'Formalidad incompatible' }
+    rango: { suave: 3, ajuste: -12, duro: 3.5, texto: 'Mucha distancia de formalidad entre prendas', textoDuro: 'Formalidad incompatible' }
   },
 
   /* ---------- Calzado (Bloque IV y reglas del armario) ---------- */
   // Por id; gana la primera regla que encaje. «_derby» y «_zapatilla» valen para calzado nuevo.
+  // V3.7 (Eric, 02-11-2026): todos los zapatos se tratan igual. Su pareja buena suma lo mismo (+4), el comodín +1,
+  // y solo restan los choques reales con el pantalón. Ningún zapato resta por no estar con su pareja preferida.
   calzado: {
     'zap-derby-cognac': [
       { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -20, texto: 'Derby cognac con chino negro: contraste cálido-frío excesivo' },
       { pantalon: { tipo: 'chino', familia: ['marino', 'gris', 'beige'] }, ajuste: 4, texto: 'Derby cognac con chino {pf}' },
-      { pantalon: { tipo: 'vaquero' }, ajuste: 2, texto: 'Derby cognac con vaquero' }
+      { pantalon: { tipo: 'vaquero' }, ajuste: 4, texto: 'Derby cognac con vaquero' }
     ],
     'zap-derby-oscuro': [
       { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -4, texto: 'Derby marrón oscuro con chino negro: aceptable, sin más' },
       { pantalon: { tipo: 'chino', familia: ['beige', 'gris', 'marino'] }, ajuste: 4, texto: 'Derby marrón oscuro con chino {pf}' },
-      { pantalon: { tipo: 'vaquero' }, ajuste: 3, texto: 'Derby marrón oscuro con vaquero' }
+      { pantalon: { tipo: 'vaquero' }, ajuste: 4, texto: 'Derby marrón oscuro con vaquero' }
     ],
     'mr530': [
-      { pantalon: { tipo: 'chino', familia: ['beige', 'marino'] }, ajuste: 3, texto: 'MR530 con chino {pf}: su mejor pareja' },
-      { pantalon: { tipo: 'vaquero' }, ajuste: 3, texto: 'MR530 con vaquero: su mejor pareja' }
+      { pantalon: { tipo: 'chino', familia: ['beige', 'marino'] }, ajuste: 4, texto: 'MR530 con chino {pf}: su mejor pareja' },
+      { pantalon: { tipo: 'vaquero' }, ajuste: 4, texto: 'MR530 con vaquero: su mejor pareja' }
     ],
     'u740': [
-      { pantalon: { tipo: 'chino', familia: ['gris', 'marino', 'negro'] }, ajuste: 3, texto: 'U740 con chino {pf}' },
+      { pantalon: { tipo: 'chino', familia: ['gris', 'marino', 'negro'] }, ajuste: 4, texto: 'U740 con chino {pf}' },
       { ajuste: 1, texto: 'U740: la zapatilla comodín' }
     ],
     'vans': [
-      { pantalon: { tipo: 'vaquero' }, ajuste: 1, texto: 'Vans con vaquero: día casual' },
-      { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: 1, texto: 'Vans con chino negro: día casual' },
-      { ajuste: -8, texto: 'Vans: solo con vaqueros o chino negro' }
+      { pantalon: { tipo: 'vaquero' }, ajuste: 4, texto: 'Vans con vaquero: su mejor pareja' },
+      { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: 4, texto: 'Vans con chino negro: su mejor pareja' }
     ],
     'zap-negra': [
-      { pantalon: { tipo: 'vaquero' }, ajuste: 2, texto: 'Zapatilla negra con vaquero' },
-      { pantalon: { tipo: 'chino', familia: ['negro', 'gris'] }, ajuste: 2, texto: 'Zapatilla negra con chino {pf}' },
-      { pantalon: { tipo: 'chino', familia: ['beige'] }, ajuste: 0, texto: '' }
+      { pantalon: { tipo: 'vaquero' }, ajuste: 4, texto: 'Zapatilla negra con vaquero' },
+      { pantalon: { tipo: 'chino', familia: ['negro', 'gris'] }, ajuste: 4, texto: 'Zapatilla negra con chino {pf}' }
     ],
     'zap-blanca': [
-      { pantalon: { tipo: 'chino', familia: ['gris', 'marino', 'negro'] }, ajuste: 3, texto: 'Zapatilla blanca con chino {pf}' },
+      { pantalon: { tipo: 'chino', familia: ['gris', 'marino', 'negro'] }, ajuste: 4, texto: 'Zapatilla blanca con chino {pf}' },
       { ajuste: 1, texto: 'Zapatilla blanca: comodín' }
     ],
     'zap-crudo': [
       { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -4, texto: 'Talón marrón con chino negro: el cálido choca' },
-      { pantalon: { tipo: 'chino', familia: ['beige', 'marino', 'gris'] }, ajuste: 3, texto: 'Zapatilla blanco roto con chino {pf}' },
-      { pantalon: { tipo: 'vaquero' }, ajuste: 3, texto: 'Zapatilla blanco roto con vaquero' }
+      { pantalon: { tipo: 'chino', familia: ['beige', 'marino', 'gris'] }, ajuste: 4, texto: 'Zapatilla blanco roto con chino {pf}' },
+      { pantalon: { tipo: 'vaquero' }, ajuste: 4, texto: 'Zapatilla blanco roto con vaquero' }
     ],
     _derby: [
-      { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -6, texto: 'Zapato marrón con chino negro: mejor evitarlo' },
-      { pantalon: { tipo: 'chino' }, ajuste: 2, texto: 'Zapato con chino: buena base de oficina' }
+      { pantalon: { tipo: 'chino', familia: ['negro'] }, ajuste: -6, texto: 'Zapato marrón con chino negro: mejor evitarlo' }
     ],
     _zapatilla: []
   },
@@ -573,12 +582,17 @@ const CONFIG = {
     mismoTejido: { ajuste: -3, texto: 'Mismo tejido arriba y abajo: resta' }
   },
   focoCalzado: { ajuste: -8, texto: 'Dos focos: color saturado y calzado llamativo' },
+  // Cinturón (apartado 4): el que toca suma; el otro resta; negro con zapato marrón, nunca
+  cinturon: { bien: 2, mal: -5, duro: -10, textoDuro: 'Cinturón negro con zapato marrón: nunca' },
 
   /* ---------- Contexto (Bloque VII) ---------- */
   // Cada tipo de día fija un objetivo y un mínimo de formalidad. Mínimo y prohibiciones: obligatorios.
+  // V3.7 (Eric, 02-11-2026): todas las prendas valen igual. «Libre» (clave normal, por defecto) no tiene objetivo de
+  // formalidad: ninguna prenda sube ni baja por ser más o menos formal; solo cuenta si el outfit combina.
+  // «Reunión» y «Casual» son contextos que eliges tú cuando quieres ir más arreglado o más informal.
   tipoDia: {
+    normal: { nombre: 'Libre', objetivo: null, minimo: 1, camisetaSola: true },
     reunion: { nombre: 'Reunión', objetivo: 4.2, minimo: 3, camisetaSola: false, sinZapatilla: true },
-    normal: { nombre: 'Normal', objetivo: 3.7, minimo: 1, camisetaSola: true },   // Eric: Vans y camiseta sola valen en la oficina
     casual: { nombre: 'Casual', objetivo: 3.0, minimo: 1, camisetaSola: true }
   },
   ajusteFormalidad: { tolerancia: 0.4, porPunto: -10, bajo: 1.5, ajusteBajo: -4 },
@@ -636,7 +650,8 @@ const HUECOS = [
   { k: 'exterior', label: 'Exterior', opcional: true, sin: 'Sin cazadora' },
   { k: 'pantalon', label: 'Pantalón' },
   { k: 'calzado', label: 'Calzado' },
-  { k: 'calcetin', label: 'Calcetín' }
+  { k: 'calcetin', label: 'Calcetín' },
+  { k: 'cinturon', label: 'Cinturón', opcional: true, sin: 'Sin cinturón' }
 ];
 const TIPOS = {
   base: ['polo', 'polo-punto', 'camiseta', 'camisa'],
@@ -644,7 +659,8 @@ const TIPOS = {
   exterior: ['cazadora', 'abrigo'],
   pantalon: ['chino', 'vaquero'],
   calzado: ['zapatilla', 'derby'],
-  calcetin: ['calcetin']
+  calcetin: ['calcetin'],
+  cinturon: ['cinturon']
 };
 
 /* ---------- Inventario base (apartado 2 de inventario-armario.txt) ---------- */
@@ -681,7 +697,7 @@ const INVENTARIO_BASE = [
   P('vaqueros', 'Vaqueros azules', 'pantalon', 'vaquero', 'vaquero', '#4c6a90', 2, 0),
   P('mr530', 'New Balance MR530 beige', 'calzado', 'zapatilla', 'beige', '#d8ccb5', 2, 0),
   P('u740', 'New Balance U740 blancas/grises', 'calzado', 'zapatilla', 'blanco', '#ebebe8', 2, 0, { hex2: '#a9adb2', notas: 'Zapatilla comodín' }),
-  P('vans', 'Vans negras/blancas', 'calzado', 'zapatilla', 'negro', '#1b1b1d', 1, 0, { hex2: '#f4f4f2', material: 'Lona', notas: 'Solo casual' }),
+  P('vans', 'Vans negras/blancas', 'calzado', 'zapatilla', 'negro', '#1b1b1d', 1, 0, { hex2: '#f4f4f2', material: 'Lona', notas: 'Lona · valen cualquier día' }),
   P('zap-negra', 'Zapatilla negra suela blanca', 'calzado', 'zapatilla', 'negro', '#1c1c1e', 2, 0, { hex2: '#f2f0ea', material: 'Aspecto piel lisa', volumen: 'robusto', notas: 'Talón blanco · suela de plataforma blanca' }),
   P('zap-blanca', 'Zapatilla blanca talón negro', 'calzado', 'zapatilla', 'blanco', '#ece9e1', 2, 0, { hex2: '#e4dccb', material: 'Aspecto piel lisa', volumen: 'robusto', notas: 'Talón negro · suela crema gruesa' }),
   P('zap-crudo', 'Zapatilla blanco roto talón marrón', 'calzado', 'zapatilla', 'blanco', '#e9e2cf', 3, 0, { hex2: '#75502f', material: 'Aspecto piel, talón granulado', volumen: 'fino', cinturon: 'marron', notas: 'Minimalista · talón marrón cognac · suela fina · no vale en día «Reunión»' }),
@@ -689,25 +705,38 @@ const INVENTARIO_BASE = [
   P('zap-derby-oscuro', 'Derby marrón oscuro', 'calzado', 'derby', 'marrón oscuro', '#4a3226', 3, 0, { material: 'Sintético, aspecto ante', tienda: 'Pier One (Zalando)', ref: 'PI915C014-O11', volumen: 'robusto', notas: 'Punta mocasín · suela negra dentada gruesa con buen agarre' }),
   P('calc-negro', 'Calcetines negros', 'calcetin', 'calcetin', 'negro', '#1b1b1d', null, 0),
   P('calc-gris', 'Calcetines grises', 'calcetin', 'calcetin', 'gris', '#8a8d90', null, 0),
-  P('calc-blanco', 'Calcetines blancos', 'calcetin', 'calcetin', 'blanco', '#f2f2f0', null, 0)
+  P('calc-blanco', 'Calcetines blancos', 'calcetin', 'calcetin', 'blanco', '#f2f2f0', null, 0),
+  // V3.7: los cinturones son una pieza más del outfit (no entran en la paleta ni en la formalidad; los juzga su regla)
+  P('cint-marron', 'Cinturón marrón de ante', 'cinturon', 'cinturon', 'marrón', '#5e3e30', null, 0, { material: '100% piel, ante', tienda: 'Pier One', ref: 'PI952D048-O11', notas: 'Ancho · hebilla plateada mate' }),
+  P('cint-negro', 'Cinturón negro', 'cinturon', 'cinturon', 'negro', '#1c1c1c', null, 0, { material: '100% piel granulada', tienda: 'Pier One', ref: 'PI954D01Z-Q11', notas: 'De vestir · hebilla plateada' })
 ];
 
-/* Cinturones (no son hueco del outfit: solo entran en la frase de estilista) */
+/* Cinturones (V3.7: pieza del outfit, hueco «cinturon») · apartado 4 del inventario */
 const CINTURONES = {
   marron: 'cinturón marrón de ante',
   negro: 'cinturón negro'
 };
 // Con zapato marrón, el marrón. Si la prenda lo fija (campo cinturon), ese. Con zapatilla, el negro, salvo con chino beige o vaqueros, donde el negro queda duro.
 const CINTURON_MARRON_CON_ZAPATILLA = ['beige', 'vaquero'];
-function cinturonPara(calz, pant) {
-  if (calz.cinturon && CINTURONES[calz.cinturon]) return CINTURONES[calz.cinturon];   // zap-crudo: el talón marrón pide el marrón
-  if (calz.tipo === 'derby') return CINTURONES.marron;
-  return CINTURON_MARRON_CON_ZAPATILLA.includes(fam(pant)) ? CINTURONES.marron : CINTURONES.negro;
+function cinturonEsperado(calz, pant) {
+  if (calz.cinturon && CINTURONES[calz.cinturon]) return { c: calz.cinturon, por: 'repite el talón marrón de la zapatilla' };
+  if (calz.tipo === 'derby') return { c: 'marron', por: 'mismo cuero que el zapato marrón' };
+  return CINTURON_MARRON_CON_ZAPATILLA.includes(fam(pant)) ? { c: 'marron', por: `con ${pant.tipo === 'vaquero' ? 'vaquero' : 'chino ' + fam(pant)} el negro queda duro` } : { c: 'negro', por: `con chino ${fam(pant)} y zapatilla` };
+}
+function cinturonPara(calz, pant) { return CINTURONES[cinturonEsperado(calz, pant).c]; }
+// Familia del cinturón: «marron» o «negro» (otros colores, por su familia)
+function claseCinturon(c) { const f = fam(c); return f === 'marrón' || f === 'cognac' || f === 'marrón oscuro' ? 'marron' : f === 'negro' ? 'negro' : f; }
+// Regla del cinturón: [OBLIGATORIA] negro con zapato marrón (informe caso 19); el que toca suma, el otro resta
+function reglaCinturon(cint, calz, pant) {
+  const B = CFG.cinturon, e = cinturonEsperado(calz, pant), k = claseCinturon(cint);
+  if (k === 'negro' && calz.tipo === 'derby') return { ajuste: B.duro, texto: B.textoDuro, duro: true };
+  if (k === e.c) return { ajuste: B.bien, texto: `${cint.nombre}: ${e.por}` };
+  return { ajuste: B.mal, texto: `Mejor el ${CINTURONES[e.c]}: ${e.por}` };
 }
 const CINTURONES_TEXTO = 'Marrón de ante, ancho, hebilla plateada (Pier One PI952D048-O11) · negro de piel granulada, de vestir (Pier One PI954D01Z-Q11)';
 
 /* Correcciones de datos por versión: se aplican una vez a lo guardado en el iPhone */
-const DATOS_V = 5;
+const DATOS_V = 6;
 const CORRECCIONES = {
   2: {
     renombrar: { 'jer-blancomarino': 'jer-marino' },
@@ -723,7 +752,9 @@ const CORRECCIONES = {
   // V3.2: corte de los chinos (Eric: todos rectos) y volumen de los derbys
   4: { campos: { 'ch-negro': ['corte'], 'ch-gris': ['corte'], 'ch-marino': ['corte'], 'ch-beige': ['corte'], 'zap-derby-cognac': ['volumen'], 'zap-derby-oscuro': ['volumen'] } },
   // V3.5 (01-11-2026): altas del inventario; el polo marrón oscuro devuelto pasa al archivo (el historial se conserva)
-  5: { altas: ['z-ingles-marron', 'zap-negra', 'zap-blanca', 'zap-crudo'], archivar: ['z-marron'] }
+  5: { altas: ['z-ingles-marron', 'zap-negra', 'zap-blanca', 'zap-crudo'], archivar: ['z-marron'] },
+  // V3.7 (02-11-2026): los cinturones pasan a ser prendas del armario; las Vans dejan de ser «solo casual»
+  6: { altas: ['cint-marron', 'cint-negro'], campos: { 'vans': ['notas'] } }
 };
 
 /* Apartado 8 · Outfits probados */
@@ -804,7 +835,8 @@ function oscura(p) { return Lp(p) < CFG.color.todoOscuro.Lmedia; }
 function lum(hex) { return oklab(hex).L; }
 function mapa(prendas) { const m = {}; for (const p of prendas) m[p.id] = p; return m; }
 function claveOutfit(o) { return HUECOS.map(h => o[h.k] || '-').join('|'); }
-function claveSinCalcetin(o) { return HUECOS.filter(h => h.k !== 'calcetin').map(h => o[h.k] || '-').join('|'); }
+// Sin calcetín ni cinturón: se ajustan solos al pantalón y al calzado (así no cambian claves guardadas antes de la V3.7)
+function claveSinCalcetin(o) { return HUECOS.filter(h => h.k !== 'calcetin' && h.k !== 'cinturon').map(h => o[h.k] || '-').join('|'); }
 function arribaDe(o) { return o.capa || o.base; }
 function enMes(p, mes) { return !p.temporadas || !p.temporadas.length || p.temporadas.includes(mes); }
 // Clase de textura: punto (jersey, polo de punto), piqué, popelín, algodón, sarga, denim, ante, zapatilla…
@@ -923,7 +955,7 @@ function choquesCapaAbajo(o, M) {
    M: mapa id → prenda
    ctx (opcional): {tiempo:{ts,tmax,lluvia}, umbrales, mes, hoy, usos, tipoDia, gustos}
    Devuelve: nota (final), estilo, contexto, veredicto, ocasion, notas[{ajuste,texto,regla,ambito,duro}], reglas[] */
-function evaluar(o, M, ctx) {
+function evaluar(o, M, ctx, crudo) {
   const C = CFG;
   const base = M[o.base], capa = o.capa ? M[o.capa] : null, ext = o.exterior ? M[o.exterior] : null;
   const pant = M[o.pantalon], calz = M[o.calzado], calc = o.calcetin ? M[o.calcetin] : null;
@@ -1071,6 +1103,8 @@ function evaluar(o, M, ctx) {
   const vol = (C.volumen[pant.corte] || {})[calz.volumen];
   if (vol) add(vol[0], vol[1], 'volumen');
   if (calz.id === 'zap-derby-cognac' && famPar(arriba) === 'azul cielo') add(C.cognacCeleste.ajuste, C.cognacCeleste.texto, 'calzado');
+  const cint = o.cinturon ? M[o.cinturon] : null;
+  if (cint) { const rc = notaCinturon(cint, calz, pant); if (rc) notas.push(rc); }
 
   /* 12. Calcetines: acompañan al pantalón */
   if (calc) {
@@ -1090,19 +1124,34 @@ function evaluar(o, M, ctx) {
     }
   }
 
-  /* Estilo: base + ajustes, con rendimiento decreciente de lo que suma */
-  const positivos = notas.filter(n => n.ajuste > 0).reduce((a, n) => a + n.ajuste, 0);
-  if (positivos > C.tope.desde) add(-(positivos - C.tope.desde) * (1 - C.tope.factor), C.tope.texto, 'tope');
-  const sumaEstilo = notas.reduce((s, n) => s + n.ajuste, 0);
-  const estiloBruto = C.puntosBase + sumaEstilo;
-
-  /* Contexto: tiempo, tipo de día, temporada, rotación y tus gustos */
+  /* Contexto: tiempo, tipo de día, temporada, rotación y tus gustos (no depende del cinturón) */
   let contexto = 100;
   if (ctx) {
     const addC = (ajuste, texto, regla, duro) => { if (ajuste !== 0 || duro) { notas.push({ ajuste: Math.round(ajuste * 10) / 10, texto, regla, duro: !!duro, ambito: 'contexto' }); contexto += ajuste; } };
     aplicarContexto(o, M, ctx, z, addC);
     contexto = Math.max(0, Math.min(100, contexto));
   }
+  // crudo: para añadir después el cinturón sin volver a evaluar todo (generar)
+  if (crudo) return { notas, contexto, cxH: cx.H };
+  return cerrarEvaluacion(o, M, notas, contexto, cx.H);
+}
+// Nota del cinturón (regla del apartado 4) en el formato de las demás notas de estilo
+function notaCinturon(cint, calz, pant) {
+  const rc = reglaCinturon(cint, calz, pant);
+  return rc.ajuste !== 0 || rc.duro ? { ajuste: Math.round(rc.ajuste * 10) / 10, texto: rc.texto, regla: 'cinturon', duro: !!rc.duro, ambito: 'estilo' } : null;
+}
+// Cierra la evaluación: rendimiento decreciente de lo que suma, estilo, nota final y veredicto
+function cerrarEvaluacion(o, M, notasIn, contexto, cxH) {
+  const C = CFG, notas = notasIn.slice();
+  /* Estilo: base + ajustes, con rendimiento decreciente de lo que suma */
+  const est = notas.filter(n => n.ambito === 'estilo');
+  const positivos = est.filter(n => n.ajuste > 0).reduce((a, n) => a + n.ajuste, 0);
+  let sumaEstilo = est.reduce((s, n) => s + n.ajuste, 0);
+  if (positivos > C.tope.desde) {
+    const t = Math.round(-(positivos - C.tope.desde) * (1 - C.tope.factor) * 10) / 10;
+    if (t !== 0) { notas.push({ ajuste: t, texto: C.tope.texto, regla: 'tope', duro: false, ambito: 'estilo' }); sumaEstilo += t; }
+  }
+  const estiloBruto = C.puntosBase + sumaEstilo;
 
   const reglas = notas.filter(n => n.duro).map(n => n.texto);
   let estilo = Math.max(0, Math.min(100, Math.round(estiloBruto)));
@@ -1112,7 +1161,7 @@ function evaluar(o, M, ctx) {
   const v = C.veredicto, tv = C.textosVeredicto;
   const veredicto = reglas.length ? tv.no : nota >= v.pega ? tv.pega : nota >= v.matices ? tv.matices : tv.no;
   notas.sort((a, b) => (b.duro ? 1 : 0) - (a.duro ? 1 : 0) || Math.abs(b.ajuste) - Math.abs(a.ajuste));
-  return { nota, estilo, contexto: Math.round(contexto), bruto, veredicto, ocasion: ocasionDe(o, M), notas, reglas, complejidad: cx.H };
+  return { nota, estilo, contexto: Math.round(contexto), bruto, veredicto, ocasion: ocasionDe(o, M), notas, reglas, complejidad: cxH };
 }
 
 /* Contexto: tipo de día (objetivo y mínimo de formalidad), tiempo, temporada, rotación y gustos */
@@ -1126,11 +1175,13 @@ function aplicarContexto(o, M, ctx, z, add) {
     for (const x of visibles) if (x.p.formalidad < TD.minimo) add(-20, `${x.p.nombre}: no va en un día «${TD.nombre}»`, 'dia', true);
     if (TD.sinZapatilla && calz.tipo === 'zapatilla' && calz.formalidad >= TD.minimo) add(-20, `${calz.nombre}: ninguna zapatilla en un día «${TD.nombre}»`, 'dia', true);
     if (!TD.camisetaSola && base.tipo === 'camiseta' && !capa) add(-20, `Camiseta sin jersey: no va en un día «${TD.nombre}»`, 'dia', true);
-    // Suave: ajuste al objetivo de formalidad del día
-    const AF = C.ajusteFormalidad, t = visibles.reduce((s, x) => s + x.a, 0) || 1;
-    const media = visibles.reduce((s, x) => s + x.a * formalidadEf(x.p), 0) / t, dist = Math.abs(media - TD.objetivo);
-    if (dist > AF.tolerancia) add(AF.porPunto * (dist - AF.tolerancia), media < TD.objetivo ? `Algo informal para un día «${TD.nombre}»` : `Algo formal para un día «${TD.nombre}»`, 'dia');
-    for (const x of visibles) if (formalidadEf(x.p) < TD.objetivo - AF.bajo && x.p.formalidad >= TD.minimo) add(AF.ajusteBajo, `${x.p.nombre} rebaja el tono para un día «${TD.nombre}»`, 'dia');
+    // Suave: ajuste al objetivo de formalidad del día (solo si lo has elegido: «Libre» no tiene objetivo)
+    if (TD.objetivo != null) {
+      const AF = C.ajusteFormalidad, t = visibles.reduce((s, x) => s + x.a, 0) || 1;
+      const media = visibles.reduce((s, x) => s + x.a * formalidadEf(x.p), 0) / t, dist = Math.abs(media - TD.objetivo);
+      if (dist > AF.tolerancia) add(AF.porPunto * (dist - AF.tolerancia), media < TD.objetivo ? `Algo informal para un día «${TD.nombre}»` : `Algo formal para un día «${TD.nombre}»`, 'dia');
+      for (const x of visibles) if (formalidadEf(x.p) < TD.objetivo - AF.bajo && x.p.formalidad >= TD.minimo) add(AF.ajusteBajo, `${x.p.nombre} rebaja el tono para un día «${TD.nombre}»`, 'dia');
+    }
     // Al quitarse el jersey en la oficina no conviene quedarse en camiseta
     if (capa && base.tipo === 'camiseta' && !TD.camisetaSola) add(C.trayecto.baseNoSola.ajuste, C.trayecto.baseNoSola.texto, 'trayecto');
   }
@@ -1150,7 +1201,9 @@ function aplicarContexto(o, M, ctx, z, add) {
         if (ext && !capa) add(T.exteriorFacil.ajuste, T.exteriorFacil.texto, 'trayecto');
         if (capa && !ext) add(T.soloJersey.ajuste, T.soloJersey.texto, 'trayecto');
       }
-      if ((capa || ext) && base.formalidad >= 3) add(T.baseSola.ajuste, T.baseSola.texto, 'trayecto');
+      // La base funciona sola si el día admite esa base sin capas (no depende de lo formal que sea)
+      const baseValeSola = !TD || TD.camisetaSola || base.tipo !== 'camiseta';
+      if ((capa || ext) && baseValeSola) add(T.baseSola.ajuste, T.baseSola.texto, 'trayecto');
     }
     if (t.tmax != null && t.tmax >= u.baseLigera) {
       if (/lino/i.test(base.material || '')) add(C.calor.lino.ajuste, C.calor.lino.texto, 'calor');
@@ -1187,7 +1240,7 @@ function aplicarRotacion(o, M, ctx, add) {
   const recientes = new Set();
   for (const u of previos) if (fechasOficina.includes(u.fecha)) u.ids.forEach(id => recientes.add(id));
   for (const h of HUECOS) {
-    const id = o[h.k]; if (!id || h.k === 'calcetin' || !recientes.has(id)) continue;
+    const id = o[h.k]; if (!id || h.k === 'calcetin' || h.k === 'cinturon' || !recientes.has(id)) continue;
     const aj = (h.k === 'base' || h.k === 'capa' || h.k === 'exterior') ? R.prendaReciente.arriba : R.prendaReciente.resto;
     add(aj, `${M[id].nombre}: ${R.prendaReciente.texto}`, 'rotacion');
   }
@@ -1196,31 +1249,34 @@ function aplicarRotacion(o, M, ctx, add) {
   const usadasVentana = new Set();
   for (const u of previos) if (diasEntre(u.fecha, hoy) <= dias) u.ids.forEach(id => usadasVentana.add(id));
   let plus = 0;
-  for (const h of HUECOS) { const id = o[h.k]; if (id && h.k !== 'calcetin' && !usadasVentana.has(id)) plus += R.sinUsar.ajuste; }
+  for (const h of HUECOS) { const id = o[h.k]; if (id && h.k !== 'calcetin' && h.k !== 'cinturon' && !usadasVentana.has(id)) plus += R.sinUsar.ajuste; }
   if (plus) add(Math.min(plus, R.sinUsar.max), R.sinUsar.texto, 'rotacion');
 }
 function idsAOutfit(ids, M) {
-  const o = { base: null, capa: null, exterior: null, pantalon: null, calzado: null, calcetin: null };
+  const o = { base: null, capa: null, exterior: null, pantalon: null, calzado: null, calcetin: null, cinturon: null };
   for (const id of ids) { const p = M[id]; if (p && o[p.hueco] === null) o[p.hueco] = id; }
   return o;
 }
 
 /* ---------- Tiempo (apartado 7) ---------- */
-function encajaTiempo(o, M, t, u) {
+// forzadas (opcional): huecos que has elegido tú en «Quiero ponerme». Un motivo que solo afecta a piezas elegidas no descarta:
+// tu elección manda sobre el tiempo (la tarjeta te avisa). Los demás huecos siguen la regla del tiempo.
+function encajaTiempo(o, M, t, u, forzadas) {
   u = u || AJUSTES_BASE.umbrales;
-  const motivos = [];
-  if (!t) return { ok: true, motivos };
+  const todos = [], F = forzadas || {};
+  const motivos = { push: (texto, ...huecos) => todos.push({ texto, huecos }) };
+  if (!t) return { ok: true, motivos: [] };
   const base = M[o.base], capa = o.capa && M[o.capa], ext = o.exterior && M[o.exterior];
   if (t.ts != null) {
     const ts = Math.round(t.ts);
     if (ts >= u.sinCapa) {
-      if (capa) motivos.push(`Con ${ts} °C al salir de Manresa sobra el jersey`);
-      if (ext) motivos.push(`Con ${ts} °C al salir de Manresa sobra la cazadora`);
+      if (capa) motivos.push(`Con ${ts} °C al salir de Manresa sobra el jersey`, 'capa');
+      if (ext) motivos.push(`Con ${ts} °C al salir de Manresa sobra la cazadora`, 'exterior');
     } else if (ts >= u.unaCapa) {
       const n = (capa ? 1 : 0) + (ext ? 1 : 0);
       if (n === 0) motivos.push(`Con ${ts} °C al salir hace falta un jersey o una cazadora ligera`);
-      if (n === 2) motivos.push(`Con ${ts} °C al salir basta con una capa (jersey o cazadora)`);
-      if (ext && ext.abrigo >= 3) motivos.push(`Con ${ts} °C el abrigo de invierno es demasiado`);
+      if (n === 2) motivos.push(`Con ${ts} °C al salir basta con una capa (jersey o cazadora)`, 'capa', 'exterior');
+      if (ext && ext.abrigo >= 3) motivos.push(`Con ${ts} °C el abrigo de invierno es demasiado`, 'exterior');
     } else {
       if (!capa) motivos.push(`Con ${ts} °C al salir hace falta jersey`);
       if (!ext) motivos.push(`Con ${ts} °C al salir hace falta prenda exterior`);
@@ -1228,10 +1284,11 @@ function encajaTiempo(o, M, t, u) {
   }
   if (t.tmax != null && base) {
     const tm = Math.round(t.tmax);
-    if (tm >= u.baseLigera && base.manga !== 'corta') motivos.push(`Con ${tm} °C de máxima en Barcelona, mejor base de manga corta`);
-    if (tm < u.baseJersey && base.bajoJersey === false) motivos.push(`Con ${tm} °C de máxima, la base tiene que ir bien bajo jersey`);
+    if (tm >= u.baseLigera && base.manga !== 'corta') motivos.push(`Con ${tm} °C de máxima en Barcelona, mejor base de manga corta`, 'base');
+    if (tm < u.baseJersey && base.bajoJersey === false) motivos.push(`Con ${tm} °C de máxima, la base tiene que ir bien bajo jersey`, 'base');
   }
-  return { ok: motivos.length === 0, motivos };
+  const cuentan = todos.filter(m => !m.huecos.length || !m.huecos.every(h => F[h] && o[h] === F[h]));
+  return { ok: cuentan.length === 0, motivos: cuentan.map(m => m.texto), avisos: todos.filter(m => !cuentan.includes(m)).map(m => m.texto) };
 }
 function avisoAbrigo(prendas, t, u) {
   u = u || AJUSTES_BASE.umbrales;
@@ -1247,6 +1304,9 @@ function generar(prendas, ctx, opciones) {
   opciones = opciones || {};
   const M = mapa(prendas);
   const G = porHueco(opciones.todas ? prendas.filter(p => !p.archivada) : disponibles(prendas));
+  // «Quiero ponerme»: las piezas elegidas van sí o sí (aunque estén marcadas como no disponibles)
+  const Q = opciones.quiero || {};
+  for (const [h, id] of Object.entries(Q)) { if (!G[h]) continue; const p = M[id]; if (p && !p.archivada) G[h] = [p]; }
   const t = ctx && ctx.tiempo, u = (ctx && ctx.umbrales) || AJUSTES_BASE.umbrales;
   // Prefiltro por tiempo: qué combinaciones de capa/exterior se permiten
   let capas = [null, ...G.capa], exts = [null, ...G.exterior];
@@ -1256,16 +1316,28 @@ function generar(prendas, ctx, opciones) {
     else if (ts < u.unaCapa) { capas = G.capa.slice(); exts = G.exterior.slice(); }
     else exts = [null, ...G.exterior.filter(e => e.abrigo < 3)];
   }
+  if (Q.capa && G.capa.length) capas = G.capa.slice();
+  if (Q.exterior && G.exterior.length) exts = G.exterior.slice();
   const res = [];
   const calcs = G.calcetin.length ? G.calcetin : [null];
+  const cints = G.cinturon && G.cinturon.length ? G.cinturon : [null];
+  const invalidas = opciones.todas || opciones.incluirInvalidas;
   for (const b of G.base) for (const c of capas) for (const e of exts) {
     const parcial = { base: b.id, capa: c ? c.id : null, exterior: e ? e.id : null };
-    if (t && !encajaTiempo(Object.assign({}, parcial), M, t, u).ok) continue;
+    if (t && !encajaTiempo(Object.assign({}, parcial), M, t, u, Q).ok) continue;
     for (const p of G.pantalon) for (const z of G.calzado) for (const s of calcs) {
-      const o = { base: b.id, capa: c ? c.id : null, exterior: e ? e.id : null, pantalon: p.id, calzado: z.id, calcetin: s ? s.id : null };
-      const ev = evaluar(o, M, ctx);
-      if (ev.reglas.length && !opciones.todas && !opciones.incluirInvalidas) continue;
-      res.push({ o, ...ev, clave: claveOutfit(o), tipoArriba: b.tipo.startsWith('polo') ? 'polo' : b.tipo });
+      const o0 = { base: b.id, capa: c ? c.id : null, exterior: e ? e.id : null, pantalon: p.id, calzado: z.id, calcetin: s ? s.id : null, cinturon: null };
+      // El cinturón solo depende del pantalón y del calzado: se evalúa el resto una vez y se le suma su regla
+      const crudo = evaluar(o0, M, ctx, true);
+      if (!invalidas && crudo.notas.some(n => n.duro)) continue;
+      for (const k of cints) {
+        if (k && !invalidas && z.tipo === 'derby' && claseCinturon(k) === 'negro') continue;   // obligatoria: ni se evalúa
+        const o = k ? Object.assign({}, o0, { cinturon: k.id }) : o0;
+        const nc = k ? notaCinturon(k, z, p) : null;
+        const ev = cerrarEvaluacion(o, M, nc ? crudo.notas.concat([nc]) : crudo.notas, crudo.contexto, crudo.cxH);
+        if (ev.reglas.length && !invalidas) continue;
+        res.push({ o, ...ev, clave: claveOutfit(o), tipoArriba: b.tipo.startsWith('polo') ? 'polo' : b.tipo });
+      }
     }
   }
   res.sort(ordenar);
@@ -1274,10 +1346,11 @@ function generar(prendas, ctx, opciones) {
 function ordenar(a, b) { return b.nota - a.nota || (b.bruto || 0) - (a.bruto || 0) || (a.clave < b.clave ? -1 : 1); }
 // Elige n propuestas que no repiten base ni jersey.
 // Entre candidatas, resta CFG.variedadPenal por cada pantalón, exterior o calzado ya elegido (solo para ordenar).
-function elegirVariadas(lista, n, excluirClaves, yaElegidas) {
-  const out = [], ex = new Set(excluirClaves || []), fijas = (yaElegidas || []).slice();
-  // Ni la base ni el jersey se repiten entre propuestas: así la parte de arriba siempre cambia.
-  const usadas = new Set(); const marcar = o => { usadas.add(o.base); if (o.capa) usadas.add(o.capa); };
+function elegirVariadas(lista, n, excluirClaves, yaElegidas, quiero) {
+  const out = [], ex = new Set(excluirClaves || []), fijas = (yaElegidas || []).slice(), Q = quiero || {};
+  // Ni la base ni el jersey se repiten entre propuestas: así la parte de arriba siempre cambia
+  // (salvo lo que has elegido en «Quiero ponerme», que sale en las tres).
+  const usadas = new Set(); const marcar = o => { if (!Q.base) usadas.add(o.base); if (o.capa && !Q.capa) usadas.add(o.capa); };
   const libre = o => !usadas.has(o.base) && !(o.capa && usadas.has(o.capa));
 
   fijas.forEach(r => marcar(r.o));
@@ -1300,9 +1373,9 @@ function elegirVariadas(lista, n, excluirClaves, yaElegidas) {
   }
   return out;
 }
-function proponer(prendas, ctx, n) {
-  const lista = generar(prendas, ctx);
-  return { lista, propuestas: elegirVariadas(lista, n || 3), abrigo: avisoAbrigo(prendas, ctx && ctx.tiempo, ctx && ctx.umbrales) };
+function proponer(prendas, ctx, n, quiero) {
+  const lista = generar(prendas, ctx, { quiero });
+  return { lista, propuestas: elegirVariadas(lista, n || 3, null, null, quiero), abrigo: avisoAbrigo(prendas, ctx && ctx.tiempo, ctx && ctx.umbrales) };
 }
 
 /* Videollamada: solo parte de arriba, F ≥ 3. Se juzga con las mismas reglas de cuello, parejas y temporada. */
@@ -1356,7 +1429,7 @@ function cumpleFijas(o, fijas) {
   return true;
 }
 // El calcetín no cuenta para la estabilidad: siempre se ajusta al pantalón y al calzado
-function enComun(o, actual) { return actual ? HUECOS.filter(h => h.k !== 'calcetin' && (o[h.k] || null) === (actual[h.k] || null)).length : 0; }
+function enComun(o, actual) { return actual ? HUECOS.filter(h => h.k !== 'calcetin' && h.k !== 'cinturon' && (o[h.k] || null) === (actual[h.k] || null)).length : 0; }
 // lista: combinaciones válidas ordenadas de mejor a peor (generar o proponerVideollamada con n = Infinity)
 // ventana: margen de nota para conservar piezas (CFG.cambioMinimo); Infinity = cambio mínimo (solo lo que exijan las reglas)
 function mejorConFijas(lista, fijas, actual, ventana) {
@@ -1449,7 +1522,7 @@ function fraseEstilista(o, M, ev, ctx) {
   if (capa && base.tipo === 'camiseta') tips.push('que asome solo un dedo de camiseta en el cuello');
   if (!capa && base.tipo === 'polo-punto') tips.push('polo por fuera si no pasa de media bragueta');
   // Cinturón: solo si se ve (sin jersey y con la base por dentro o pudiendo ir por dentro)
-  if (!capa && base.tipo !== 'camiseta') tips.push(cinturonPara(calz, pant) + (base.tipo === 'camisa' ? '' : ' si se ve'));
+  if (!o.cinturon && !capa && base.tipo !== 'camiseta') tips.push(cinturonPara(calz, pant) + (base.tipo === 'camisa' ? '' : ' si se ve'));
   if (pant.tipo === 'chino') tips.push(calz.tipo === 'derby' ? 'chino sin pliegues sobre el zapato' : 'bajo del chino al tobillo o con una vuelta fina');
   const t = ctx && ctx.tiempo, u = (ctx && ctx.umbrales) || AJUSTES_BASE.umbrales;
   if (t && t.ts != null && t.tmax != null && Math.abs(t.tmax - t.ts) > u.difTrayecto && (capa || ext)) tips.unshift(ext ? 'cazadora fuera al llegar a Barcelona' : 'jersey fuera al llegar a Barcelona');
@@ -1474,7 +1547,7 @@ const CASOS_INFORME = [
   [8, 'R', 'z-tostado', null, 'u-harrington', 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],
   [9, 'R', 'polo-verde', null, null, 'ch-beige', 'zap-derby-oscuro', 't-calc-marron', 'normal'],
   [10, 'R', 'camisa-celeste', 'jer-marino', null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'reunion'],
-  [11, 'A', 'polo-marino', null, null, 'ch-beige', 'mr530', null, 'normal'],
+  [11, 'R', 'polo-marino', null, null, 'ch-beige', 'mr530', null, 'normal'],   // era A por la zapatilla en la oficina; Eric (02-11-2026): todo vale igual cualquier día
   [12, 'R', 'u-supima', 'jer-negro', null, 'ch-gris', 'u740', 'calc-gris', 'normal'],   // A en el informe por la zapatilla en oficina; Eric la permite
   [13, 'A', 'u-supima', 'u-merino-marron', null, 'ch-negro', 'zap-derby-oscuro', 'calc-negro', 'normal'],
   [14, 'R', 'u-supima', null, 'u-harrington', 'vaqueros', 'mr530', null, 'casual'],
@@ -1488,7 +1561,7 @@ const CASOS_INFORME = [
   [23, 'R', 'u-supima', 'u-merino-rojo', null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],   // A en el informe en parte por la camiseta bajo jersey en oficina; Eric la permite
   [24, 'A', 'z-marron', 'u-merino-rojo', null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],
   [25, 'I', 'polo-verde', null, 'caz-beige', 'ch-marino', 'zap-derby-oscuro', 'calc-negro', 'normal'],   // el informe lo daba por bueno; Eric (02-11-2026): sin la cazadora, oliva y marino no combinan
-  [26, 'A', 'cam-negra', null, null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],   // el informe lo vetaba en oficina; Eric lo permite
+  [26, 'R', 'cam-negra', null, null, 'ch-beige', 'zap-derby-cognac', 't-calc-marron', 'normal'],   // el informe lo vetaba en oficina; Eric (02-11-2026): todas las prendas valen igual cualquier día
   [27, 'A', 'polo-negro', null, null, 'vaqueros', 'vans', 'calc-blanco', 'casual'],
   [28, 'D', 'u-supima', 'jer-marino', null, 'ch-negro', 'u740', 'calc-negro', 'normal'],
   [29, 'I', 'camisa-celeste', null, null, 'ch-gris', 'zap-derby-oscuro', 'calc-blanco', 'normal'],
@@ -1743,6 +1816,62 @@ function runTests(silencioso) {
       const c5 = dura(o6('camisa-blanca', 'jer-marino', null, 'ch-marino', 'zap-derby-oscuro', 'calc-negro'));
       ok('Sí combinan: merino rojo con derby marrón oscuro; jersey marino con chino marino (contraste punto-sarga)', !c4.si && !c5.si, `${c4.e.nota} · ${c5.e.nota}`);
     }
+
+    // 8. V3.7 · Cinturones, «Quiero ponerme» y todas las prendas en igualdad (Eric, 02-11-2026)
+    {
+      const inv6 = clonar(INVENTARIO_BASE), M6 = mapa(inv6);
+      ok('Los dos cinturones están en el armario como hueco «cinturón»', ['cint-marron', 'cint-negro'].every(id => M6[id] && M6[id].hueco === 'cinturon'));
+      // Cada propuesta lleva el cinturón que toca (apartado 4)
+      let malCint = 0, sinCint = 0, nProp = 0;
+      for (const ts of [8, 17, 22]) for (const tipoDia of ['normal', 'reunion', 'casual']) {
+        for (const x of proponer(inv6, { tiempo: { ts, tmax: ts + 6, lluvia: 0 }, tipoDia, mes: 11 }, 3).propuestas) {
+          nProp++;
+          if (!x.o.cinturon) { sinCint++; continue; }
+          const esp = cinturonEsperado(M6[x.o.calzado], M6[x.o.pantalon]).c;
+          if (claseCinturon(M6[x.o.cinturon]) !== esp) malCint++;
+        }
+      }
+      ok('Cada propuesta lleva cinturón, y el que toca: marrón con derbys y con la zapatilla blanco roto; negro o marrón según el chino con zapatilla', !sinCint && !malCint, `${nProp} propuestas · ${sinCint} sin cinturón · ${malCint} con el que no toca`);
+      const cn = evaluar(Object.assign(o6('z-tostado', null, null, 'ch-marino', 'zap-derby-cognac', 'calc-negro'), { cinturon: 'cint-negro' }), M6);
+      ok('Cinturón negro con derby marrón: «No pega»', cn.veredicto === 'No pega' && cn.reglas.some(r => /Cinturón negro/.test(r)), `${cn.nota}`);
+      const cm = evaluar(Object.assign(o6('camisa-blanca', null, null, 'ch-gris', 'u740', 'calc-gris'), { cinturon: 'cint-marron' }), M6), cg = evaluar(Object.assign(o6('camisa-blanca', null, null, 'ch-gris', 'u740', 'calc-gris'), { cinturon: 'cint-negro' }), M6);
+      ok('Con chino gris y zapatilla, el cinturón negro puntúa mejor que el marrón', cg.nota > cm.nota, `negro ${cg.nota} · marrón ${cm.nota}`);
+      const usosCint = [{ fecha: '2026-11-02', tipoDia: 'normal', ids: ['cint-marron'], o: { cinturon: 'cint-marron' } }];
+      const rc = evaluar(Object.assign(o6('z-tostado', null, null, 'ch-marino', 'zap-derby-cognac', 'calc-negro'), { cinturon: 'cint-marron' }), M6, { hoy: '2026-11-03', usos: usosCint, mes: 11 });
+      const ctxE = { tiempo: { ts: 12, tmax: 19, lluvia: 0 }, tipoDia: 'normal', mes: 11 }, gE = generar(inv6, ctxE).filter((x, j) => j % 97 === 0);
+      ok('Generar con cinturón da la misma nota que evaluar el outfit entero', gE.every(x => { const e = evaluar(x.o, M6, ctxE); return e.nota === x.nota && e.estilo === x.estilo && e.contexto === x.contexto; }), `${gE.length} comprobadas`);
+      ok('El cinturón no cuenta para la rotación (repetirlo no resta)', !rc.notas.some(n => n.regla === 'rotacion' && /Cinturón/.test(n.texto)));
+
+      // «Quiero ponerme»
+      const ctxQ = { tiempo: { ts: 12, tmax: 19, lluvia: 0 }, tipoDia: 'normal', mes: 11 };
+      const q1 = proponer(inv6, ctxQ, 3, { capa: 'u-merino-rojo' }).propuestas;
+      ok('Quiero ponerme el merino rojo: las tres propuestas lo llevan', q1.length === 3 && q1.every(x => x.o.capa === 'u-merino-rojo'), q1.map(x => x.o.base).join(' · '));
+      const q2 = proponer(inv6, ctxQ, 3, { base: 'polo-negro', pantalon: 'ch-gris' }).propuestas;
+      ok('Quiero ponerme polo negro y chino gris: las tres los llevan y cambian el resto', q2.length === 3 && q2.every(x => x.o.base === 'polo-negro' && x.o.pantalon === 'ch-gris') && new Set(q2.map(x => claveSinCalcetin(x.o))).size === 3, q2.map(x => [x.o.capa, x.o.exterior, x.o.calzado].join('+')).join(' · '));
+      const q3 = proponer(inv6, { tiempo: { ts: 22, tmax: 26, lluvia: 0 }, tipoDia: 'normal', mes: 11 }, 3, { capa: 'jer-gris' }).propuestas;
+      ok('A 22 °C, si eliges un jersey sale igualmente (sin añadir cazadora)', q3.length > 0 && q3.every(x => x.o.capa === 'jer-gris' && !x.o.exterior), `${q3.length} propuestas`);
+      const q4 = proponer(inv6, ctxQ, 3, { base: 'polo-verde', pantalon: 'ch-marino' });
+      ok('Si lo elegido no combina (polo oliva + chino marino), no se propone nada: las reglas no se saltan', q4.propuestas.length === 0 && q4.lista.length === 0);
+      const q5 = proponer(inv6.map(p => p.id === 'z-celeste' ? Object.assign({}, p, { disponible: false }) : p), ctxQ, 3, { base: 'z-celeste' }).propuestas;
+      ok('Lo elegido sale aunque lo tengas como no disponible', q5.length > 0 && q5.every(x => x.o.base === 'z-celeste'));
+
+      // Igualdad: en «Libre» ninguna prenda sube ni baja por su formalidad
+      const libre = generar(inv6, { tiempo: { ts: 17, tmax: 23, lluvia: 0 }, tipoDia: 'normal', mes: 11 });
+      ok('Día «Libre»: ninguna combinación pierde puntos por ser más o menos formal', libre.length > 0 && libre.every(x => !x.notas.some(n => n.regla === 'dia')), `${libre.length} combinaciones`);
+      const ev = z => evaluar(o6('u-supima', null, null, 'vaqueros', z, 'calc-gris'), M6, { tipoDia: 'normal', mes: 11 });
+      ok('Día «Libre»: mismo contexto con Vans que con derbys', ev('vans').contexto === ev('zap-derby-oscuro').contexto, `Vans ${ev('vans').contexto} · derby ${ev('zap-derby-oscuro').contexto}`);
+      const bonosZap = Object.values(CFG.calzado).flat().filter(r => r.ajuste > 1).map(r => r.ajuste);
+      ok('Todos los zapatos suman lo mismo con su pareja buena', new Set(bonosZap).size === 1, [...new Set(bonosZap)].join(', '));
+      const tipos = { camisa: 0, otros: 0 };
+      for (const x of proponer(inv6, { tiempo: { ts: 22, tmax: 26, lluvia: 0 }, tipoDia: 'normal', mes: 11 }, 3).propuestas) tipos[M6[x.o.base].tipo === 'camisa' ? 'camisa' : 'otros']++;
+      ok('Día «Libre» con calor: salen también camisetas y polos, no solo camisas', tipos.otros >= 2, `${tipos.camisa} camisas · ${tipos.otros} otras`);
+
+      // Migración a la V3.7: entran los cinturones
+      const v5 = { prendas: clonar(INVENTARIO_BASE).filter(p => p.hueco !== 'cinturon'), usos: [], favoritos: [], ajustes: clonar(AJUSTES_BASE), probador: clonar(OUTFITS_PROBADOS[1].o), datosV: 5 };
+      v5.prendas.find(p => p.id === 'vans').notas = 'Solo casual';
+      const m6 = corregirDatos(v5), Mm6 = mapa(m6.prendas);
+      ok('Migración a la V3.7: entran los dos cinturones y las Vans dejan de ser «solo casual»', m6.datosV === DATOS_V && Mm6['cint-marron'] && Mm6['cint-negro'] && !/Solo casual/.test(Mm6['vans'].notas));
+    }
   } catch (err) {
     ok('Error al ejecutar los tests', false, String(err && err.stack || err));
   } finally { CFG = guardado; PARES = construirPares(CFG); }
@@ -1767,8 +1896,8 @@ const TZ = 'Europe/Madrid';
 const DIAS = ['L', 'M', 'X', 'J', 'V'];
 const DIAS_NOMBRE = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 const MESES = ['E', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
-const NOMBRE_HUECO = { base: 'Base', capa: 'Capa (jersey)', exterior: 'Exterior', pantalon: 'Pantalón', calzado: 'Calzado', calcetin: 'Calcetines' };
-const NOMBRE_TIPO = { 'polo': 'Polo', 'polo-punto': 'Polo de punto', 'camiseta': 'Camiseta', 'camisa': 'Camisa', 'jersey': 'Jersey', 'cazadora': 'Cazadora', 'abrigo': 'Abrigo', 'chino': 'Chino', 'vaquero': 'Vaquero', 'zapatilla': 'Zapatilla', 'derby': 'Zapato / derby', 'calcetin': 'Calcetín' };
+const NOMBRE_HUECO = { base: 'Base', capa: 'Capa (jersey)', exterior: 'Exterior', pantalon: 'Pantalón', calzado: 'Calzado', calcetin: 'Calcetines', cinturon: 'Cinturones' };
+const NOMBRE_TIPO = { 'polo': 'Polo', 'polo-punto': 'Polo de punto', 'camiseta': 'Camiseta', 'camisa': 'Camisa', 'jersey': 'Jersey', 'cazadora': 'Cazadora', 'abrigo': 'Abrigo', 'chino': 'Chino', 'vaquero': 'Vaquero', 'zapatilla': 'Zapatilla', 'derby': 'Zapato / derby', 'calcetin': 'Calcetín', 'cinturon': 'Cinturón' };
 
 /* ---------- Fechas (Europe/Madrid) ---------- */
 const fmtISO = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -1799,6 +1928,9 @@ function migrar(s) {
 function cargar() { try { const raw = localStorage.getItem(KEY); if (raw) return migrar(JSON.parse(raw)); } catch (e) { console.warn(e); } return estadoNuevo(); }
 let S = cargar();
 if (!S.ajustes.cinturones) S.ajustes.cinturones = CINTURONES_TEXTO;
+// «Quiero ponerme» (V3.7): piezas que eliges tú para un día; se guardan por fecha y se olvidan pasados unos días
+if (!S.quiero || typeof S.quiero !== 'object') S.quiero = {};
+for (const f of Object.keys(S.quiero)) if (f < sumarDias(hoyISO(), -7)) delete S.quiero[f];
 let fallosGuardado = 0;
 function guardar() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { if (!fallosGuardado++) toast('No se ha podido guardar en el iPhone'); } }
 function M() { return mapa(S.prendas); }
@@ -1900,9 +2032,14 @@ if (params.has('hoy')) { UI.vista = 'hoy'; UI.dia = 0; }
 function fechaVista() { return sumarDias(hoyISO(), UI.dia); }
 function esOficina(fecha) { return !!S.oficinaForzada[fecha] || S.ajustes.dias.includes(diaSemana(fecha)); }
 function ctxPara(fecha, tipoDia) { return { tiempo: tiempoPara(fecha), umbrales: S.ajustes.umbrales, mes: mesDe(fecha), hoy: fecha, usos: S.usos, tipoDia: UI.video ? null : tipoDia, gustos: S.gustos }; }
+function quieroDe(fecha) {
+  const q = Object.assign({}, S.quiero[fecha] || {}), Mp = M();
+  for (const h of Object.keys(q)) if (!Mp[q[h]] || Mp[q[h]].archivada) delete q[h];
+  return q;
+}
 function claveCache(fecha) {
   const t = tiempoPara(fecha);
-  return [fecha, UI.tipoDia, UI.video ? 'v' : 'o', t ? [Math.round(t.ts), Math.round(t.tmax), t.lluvia].join('/') : '-',
+  return [fecha, UI.tipoDia, JSON.stringify(quieroDe(fecha)), UI.video ? 'v' : 'o', t ? [Math.round(t.ts), Math.round(t.tmax), t.lluvia].join('/') : '-',
     S.prendas.filter(p => p.disponible && !p.archivada).map(p => p.id + p.formalidad + p.familia + p.hex).join(','),
     S.usos.filter(u => u.fecha < fecha).length, JSON.stringify(S.ajustes.umbrales), S.gustos.no.length].join('|');
 }
@@ -1911,13 +2048,14 @@ function asegurarPropuestas() {
   if (UI.cache && UI.cache.k === k) return UI.cache;
   const ctx = ctxPara(fecha, UI.tipoDia);
   let r;
+  const q = UI.video ? {} : quieroDe(fecha);
   if (esOficina(fecha) && !UI.video) {
-    r = proponer(S.prendas, ctx, 3);
+    r = proponer(S.prendas, ctx, 3, q);
   } else if (UI.video) {
     const lista = proponerVideollamada(S.prendas, ctx, Infinity);
     r = { lista, propuestas: elegirVariadas(lista, 3), abrigo: false };
   } else r = { lista: [], propuestas: [], abrigo: false };
-  UI.cache = { k, ctx, lista: r.lista, abrigo: r.abrigo };
+  UI.cache = { k, ctx, lista: r.lista, abrigo: r.abrigo, quiero: q };
   // Las piezas que elegiste en cada propuesta se respetan aunque cambie el tipo de día o el tiempo
   const fk = claveFijas(), previas = UI.fijas[fk] || [], tarjetasPrevias = UI.cards || [];
   const cards = [], nuevasFijas = [];
@@ -1926,7 +2064,7 @@ function asegurarPropuestas() {
     const c = mejorConFijas(r.lista, f, tarjetasPrevias[i] && tarjetasPrevias[i].o);
     if (c) { cards[i] = c; nuevasFijas[i] = f; }
   });
-  const libres = elegirVariadas(r.lista, 3 - cards.filter(Boolean).length, [], cards.filter(Boolean));
+  const libres = elegirVariadas(r.lista, 3 - cards.filter(Boolean).length, [], cards.filter(Boolean), q);
   for (let i = 0; i < 3; i++) if (!cards[i] && libres.length) cards[i] = libres.shift();
   UI.cards = cards.filter(Boolean);
   UI.fijas[fk] = nuevasFijas;
@@ -1934,7 +2072,7 @@ function asegurarPropuestas() {
   return UI.cache;
 }
 function todasCombinaciones() {
-  if (!UI.cache.todas) UI.cache.todas = UI.video ? proponerVideollamada(S.prendas, UI.cache.ctx, Infinity, true) : generar(S.prendas, UI.cache.ctx, { incluirInvalidas: true });
+  if (!UI.cache.todas) UI.cache.todas = UI.video ? proponerVideollamada(S.prendas, UI.cache.ctx, Infinity, true) : generar(S.prendas, UI.cache.ctx, { incluirInvalidas: true, quiero: UI.cache.quiero });
   return UI.cache.todas;
 }
 function claveFijas() { return fechaVista() + (UI.video ? '|v' : '|o'); }
@@ -1952,7 +2090,7 @@ function figura(o, Mp) {
   const corta = !ext && !capa && base.manga === 'corta';
   const mangaColor = ext ? ext.hex : capa ? (capa.hex2 || capa.hex) : base.hex;
   const sl = corta ? 22 : 70;
-  const nombres = [base, capa, ext, pant, calz, calc].filter(Boolean).map(p => p.nombre).join(', ');
+  const nombres = [base, capa, ext, pant, calz, calc, o.cinturon && Mp[o.cinturon]].filter(Boolean).map(p => p.nombre).join(', ');
   let s = `<svg class="fig" viewBox="0 0 120 214" role="img" aria-label="${esc(nombres)}">${defs}`;
   s += `<circle class="o" cx="60" cy="18" r="12" fill="var(--skin)"/><rect class="o" x="54" y="26" width="12" height="14" fill="var(--skin)"/>`;
   for (const x of [14, 92]) s += `<rect class="o" x="${x}" y="48" width="14" height="70" rx="7" fill="var(--skin)"/><rect class="o" x="${x}" y="46" width="14" height="${sl}" rx="6" fill="${mangaColor}"/>`;
@@ -1962,6 +2100,8 @@ function figura(o, Mp) {
   s += `<path class="o" d="M30 46 Q60 38 90 46 L92 114 L28 114 Z" fill="${torsoFill}"/>`;
   if (['polo', 'polo-punto', 'camisa'].includes(base.tipo)) s += `<polygon class="o" points="47,40 60,49 52,58" fill="${base.hex}"/><polygon class="o" points="73,40 60,49 68,58" fill="${base.hex}"/>`;
   else if (capa) s += `<path class="o" d="M51 41 Q60 49 69 41 L69 43 Q60 52 51 43 Z" fill="${base.hex}"/>`;
+  const cint = o.cinturon && Mp[o.cinturon];
+  if (cint && !capa && base.tipo === 'camisa') s += `<rect class="o" x="30" y="108" width="60" height="6" rx="1.5" fill="${cint.hex}"/><rect x="57" y="108.5" width="6" height="5" rx="1" fill="none" stroke="#c8c8c8" stroke-width="1.2"/>`;
   if (ext) s += `<path class="o" d="M28 46 L49 42 L47 118 L24 118 Z" fill="${ext.hex}"/><path class="o" d="M92 46 L71 42 L73 118 L96 118 Z" fill="${ext.hex}"/>`;
   if (calz) for (const x of [30, 60]) s += `<rect class="o" x="${x}" y="196" width="30" height="11" rx="5" fill="${calz.hex}"/><rect class="o" x="${x}" y="204" width="30" height="4" rx="2" fill="${calz.hex2 || calz.hex}"/>`;
   else for (const x of [30, 60]) s += `<rect class="ph" x="${x}" y="196" width="30" height="11" rx="5"/>`;
@@ -2043,23 +2183,48 @@ function vistaHoy() {
       <p class="muted small">Solo la parte de arriba, formalidad ${CFG.videollamadaF} o más.</p>`;
   } else {
     h += avisosTiempo(fecha, cache);
-    h += `<div class="seg wide" role="group" aria-label="Tipo de día">${['reunion', 'normal', 'casual'].map(k => `<button type="button" data-act="tipo" data-t="${k}" aria-pressed="${UI.tipoDia === k}">${CFG.tipoDia[k].nombre}</button>`).join('')}</div>`;
+    h += `<div class="seg wide" role="group" aria-label="Tipo de día">${['normal', 'reunion', 'casual'].map(k => `<button type="button" data-act="tipo" data-t="${k}" aria-pressed="${UI.tipoDia === k}">${CFG.tipoDia[k].nombre}</button>`).join('')}</div>`;
     if (S.oficinaForzada[fecha] && !S.ajustes.dias.includes(diaSemana(fecha))) h += `<button class="linkbtn" type="button" data-act="desforzar">Al final no voy a la oficina</button>`;
+    h += bloqueQuiero(cache.quiero || {}, Mp);
   }
-  if (!UI.cards.length) {
+  const nq = Object.keys(cache.quiero || {}).length;
+  if (!UI.cards.length && nq && !UI.video) {
+    const [h0, id0] = Object.entries(cache.quiero)[0], resto = Object.assign({}, cache.quiero); delete resto[h0];
+    const d = motivoDescarte(todasCombinaciones(), h0, id0, resto);
+    h += `<div class="notice warn"><b>Con ${nq === 1 ? 'esa prenda' : 'esas prendas'} no hay ningún outfit que combine.</b><span>${esc(d ? d.motivo : 'No encaja con nada de lo disponible')}. Quita alguna o cambia el tipo de día.</span></div>`;
+  } else if (!UI.cards.length) {
     h += `<div class="notice warn"><b>No hay ninguna combinación que encaje.</b><span>Revisa qué prendas tienes como no disponibles en el Armario o cambia el tipo de día.</span></div>`;
   }
   const usoHoy = S.usos.find(u => u.fecha === fecha);
   UI.cards.forEach((c, i) => { h += tarjeta(c, i, Mp, cache.ctx, usoHoy); });
   return h + (UI.video ? '' : favoritosHoy(fecha, Mp, cache));
 }
+/* «Quiero ponerme»: eliges una o varias prendas y las tres propuestas se montan a su alrededor */
+function bloqueQuiero(q, Mp) {
+  const ids = HUECOS.map(hu => q[hu.k]).filter(Boolean);
+  return `<section class="card quiero"><div class="quiero-row"><div><b>Quiero ponerme…</b><div class="small muted">${ids.length ? 'Las tres propuestas llevan ' + (ids.length === 1 ? 'esta prenda' : 'estas prendas') : 'Elige una o varias prendas y monto los outfits a su alrededor'}</div></div>
+    <button class="btn sm${ids.length ? '' : ' accent'}" type="button" data-act="quiero">${ids.length ? 'Cambiar' : 'Elegir'}</button></div>
+    ${ids.length ? `<div class="chips">${ids.map(id => `<button type="button" class="chip" data-act="quiero-t" data-h="${esc(Mp[id].hueco)}" data-id="${esc(id)}" aria-pressed="true" aria-label="Quitar ${esc(Mp[id].nombre)}">${dotHTML(Mp[id])}<span>${esc(Mp[id].nombre)}</span><span aria-hidden="true">✕</span></button>`).join('')}</div>` : ''}</section>`;
+}
+function hojaQuiero() {
+  const fecha = fechaVista(), q = quieroDe(fecha);
+  let h = `<div class="sheet-head"><div><div class="eyebrow">Una por hueco · toca otra vez para quitarla</div><h2>Quiero ponerme…</h2></div><button class="btn sm" type="button" data-act="cerrar">Listo</button></div>
+    <p class="small muted">Lo que elijas sale en las tres propuestas. Si choca con el tiempo te aviso, pero manda tu elección; las reglas de combinar no se saltan.</p>`;
+  for (const hu of HUECOS) {
+    const lista = S.prendas.filter(p => p.hueco === hu.k && !p.archivada);
+    if (!lista.length) continue;
+    h += `<h3>${esc(NOMBRE_HUECO[hu.k])}</h3><div class="chips">${lista.map(p => `<button type="button" class="chip${p.disponible ? '' : ' off'}" data-act="quiero-t" data-h="${hu.k}" data-id="${esc(p.id)}" aria-pressed="${q[hu.k] === p.id}">${dotHTML(p)}<span>${esc(p.nombre)}${p.disponible ? '' : ' · no disp.'}</span></button>`).join('')}</div>`;
+  }
+  return h + (Object.keys(q).length ? `<button class="btn block" type="button" data-act="quiero-borrar">Quitar todo</button>` : '');
+}
 function tarjeta(c, i, Mp, ctx, usoHoy) {
   const puesto = usoHoy && claveOutfit(usoHoy.o || {}) === c.clave;
   const huecos = UI.video ? HUECOS.filter(x => x.k === 'base' || x.k === 'capa') : HUECOS;
   const fijas = (UI.fijas[claveFijas()] || [])[i] || {};
   const nFijas = Object.keys(fijas).length;
+  const Q = (UI.cache && UI.cache.quiero) || {};
   const piezas = huecos.filter(x => c.o[x.k]).map(x => {
-    const p = Mp[c.o[x.k]], elegida = x.k in fijas;
+    const p = Mp[c.o[x.k]], elegida = x.k in fijas || Q[x.k] === c.o[x.k];
     return `<li><button class="piece${elegida ? ' fija' : ''}" type="button" data-act="pieza" data-i="${i}" data-h="${x.k}">${dotHTML(p)}<span class="pn">${esc(p.nombre)}</span><span class="ps">${elegida ? '<b class="tag-fija">Elegida</b>' : esc(x.label)}<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg></span></button></li>`;
   }).join('');
   // «Adaptar el resto»: solo si rehacer el outfit alrededor de lo elegido da otra combinación
@@ -2074,12 +2239,17 @@ function tarjeta(c, i, Mp, ctx, usoHoy) {
       <div class="score"><span class="title">Propuesta ${i + 1}</span><div class="num">${c.nota}<small>/100</small></div>
         <div class="row"><span class="pill ${vClase(veredicto)}">${veredicto}</span>${c.ocasion && !UI.video ? `<span class="pill occ">${esc(c.ocasion)}</span>` : ''}</div>
         ${!UI.video && c.estilo != null ? `<div class="subnotas"><span>Estilo <b>${c.estilo}</b></span><span>Contexto <b>${c.contexto}</b></span></div>` : ''}</div></div>
-    <ul class="pieces">${piezas}</ul>${avisoFijas}
+    <ul class="pieces">${piezas}</ul>${avisoFijas}${avisoQuieroTiempo(c, Mp, ctx, Q)}
     <p class="frase">${esc(frase)}</p>
     <div class="actions">${puesto ? `<button class="btn" type="button" data-act="deshacer-uso">Puesto ✓ · Deshacer</button>` : `<button class="btn primary" type="button" data-act="melopongo" data-i="${i}">Me lo pongo</button>`}
       <button class="btn" type="button" data-act="otra" data-i="${i}">Otra propuesta</button></div>
     ${UI.video ? '' : `<button class="linkbtn nomeconvence" type="button" data-act="nomeconvence" data-i="${i}">No me convence</button>`}
   </article>`;
+}
+function avisoQuieroTiempo(c, Mp, ctx, Q) {
+  if (UI.video || !Object.keys(Q).length || !ctx || !ctx.tiempo) return '';
+  const e = encajaTiempo(c.o, Mp, ctx.tiempo, ctx.umbrales, Q);
+  return e.avisos && e.avisos.length ? `<p class="small muted aviso-quiero">Lo has elegido tú: ${esc(e.avisos[0].charAt(0).toLowerCase() + e.avisos[0].slice(1))}.</p>` : '';
 }
 function favoritosHoy(fecha, Mp, cache) {
   if (!S.favoritos.length) return '';
@@ -2311,9 +2481,6 @@ function vistaAjustes() {
     <div class="thr">${thr.map(([k, l, s]) => `<label for="u-${k}" class="small">${esc(l)} <span class="muted">${esc(s)}</span></label><input id="u-${k}" class="input" type="number" inputmode="numeric" value="${u[k]}" data-chg="umbral" data-k="${k}">`).join('')}</div>
     <button class="linkbtn" type="button" data-act="umbrales-base">Volver a los valores del inventario</button>
   </section>
-  <section class="card"><h2>Cinturones</h2>
-    <label class="field"><span>Qué cinturones tienes</span><input class="input" value="${esc(a.cinturones)}" placeholder="Ej.: marrón liso, negro" data-chg="cinturones"></label>
-  </section>
   <section class="card"><h2>Copia de seguridad</h2>
     <p class="small muted">Tus datos viven en este iPhone. Exporta de vez en cuando: incluye prendas, fotos, historial, favoritos y ajustes.</p>
     <div class="actions"><button class="btn" type="button" data-act="exportar">Exportar JSON</button><label class="btn">Importar JSON<input type="file" accept="application/json,.json" data-chg="importar" hidden></label></div>
@@ -2425,7 +2592,7 @@ const ACT = {
     const fijas = fijasDe(i); fijas[h] = id;
     const r = cambioMinimo(UI.cache.lista, fijas, c.o);
     if (!r) { delete fijas[h]; toast('Esa pieza no encaja con el tiempo o el tipo de día'); return; }
-    const cambiadas = HUECOS.filter(x => x.k !== h && x.k !== 'calcetin' && (r.o[x.k] || null) !== (c.o[x.k] || null)).length;
+    const cambiadas = HUECOS.filter(x => x.k !== h && x.k !== 'calcetin' && x.k !== 'cinturon' && (r.o[x.k] || null) !== (c.o[x.k] || null)).length;
     UI.cards[i] = r; UI.vistos.push(r.clave);
     cerrarHoja(); render();
     const ad = adaptarAFijas(UI.cache.lista, fijas), mejora = ad && ad.nota > r.nota ? ` · con «Adaptar el resto» sube a ${ad.nota}` : '';
@@ -2449,6 +2616,16 @@ const ACT = {
     toast(`Outfit adaptado a tu elección: ${n === 1 ? 'cambia 1 pieza' : `cambian ${n} piezas`}`, 'Deshacer', () => { UI.cards[i] = antes; render(); });
   },
   soltar(el) { const i = +el.dataset.i; delete fijasDe(i)[el.dataset.h]; cerrarHoja(); render(); },
+  quiero() { abrirHoja(hojaQuiero()); },
+  'quiero-t'(el) {
+    const fecha = fechaVista(), q = S.quiero[fecha] = Object.assign({}, S.quiero[fecha] || {}), h = el.dataset.h, id = el.dataset.id;
+    if (q[h] === id) delete q[h]; else q[h] = id;
+    if (!Object.keys(q).length) delete S.quiero[fecha];
+    guardar(); recalcularHoy();
+    if (!$('#sheet').hidden) { $('#sheet-body').innerHTML = hojaQuiero(); hidratarFotos($('#sheet')); }
+    render();
+  },
+  'quiero-borrar'() { delete S.quiero[fechaVista()]; guardar(); recalcularHoy(); cerrarHoja(); render(); toast('La app vuelve a elegir libremente'); },
   'soltar-todo'(el) { const fk = claveFijas(); if (UI.fijas[fk]) UI.fijas[fk][+el.dataset.i] = {}; render(); toast('Piezas soltadas: la app vuelve a elegir libremente'); },
   melopongo(el) { const c = UI.cards[+el.dataset.i]; registrarUso(c.o, UI.video ? 'videollamada' : UI.tipoDia); },
   'deshacer-uso'() { const f = fechaVista(); S.usos = S.usos.filter(u => u.fecha !== f); guardar(); render(); },

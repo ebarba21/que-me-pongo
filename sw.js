@@ -1,6 +1,6 @@
 // Service worker de «Qué me pongo».
 // Cambia VERSION en cada entrega: así el iPhone detecta la actualización y muestra «Nueva versión disponible».
-const VERSION = 'V3.6';
+const VERSION = 'V3.7';
 const CACHE = 'qmp-' + VERSION;
 const APP = [
   './',
